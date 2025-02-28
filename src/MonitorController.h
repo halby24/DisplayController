@@ -9,6 +9,9 @@
 #include <comdef.h>
 #include <filesystem>
 
+// 前方宣言
+class BrightnessSync;
+
 class DisplayControllerException : public std::runtime_error
 {
 public:
@@ -53,6 +56,11 @@ public:
 
     std::vector<MonitorInfo> GetMonitors();
     int GetBrightness(HMONITOR hMonitor);
+    bool SetBrightness(HMONITOR hMonitor, int brightness);
+
+    // システム輝度同期
+    void EnableBrightnessSync(bool enable);
+    bool IsBrightnessSyncEnabled() const;
 
     // Monitor capabilities
     struct MonitorCapabilities {
@@ -73,12 +81,15 @@ public:
     std::wstring GetSettingsFilePath(const MonitorInfo& info) const;
 
 private:
+    // 輝度同期
+    std::unique_ptr<BrightnessSync> m_brightnessSync;
     static BOOL CALLBACK MonitorEnumProc(HMONITOR hMonitor, HDC hdcMonitor, LPRECT lprcMonitor, LPARAM dwData);
     HANDLE GetPhysicalMonitorHandle(HMONITOR hMonitor);
 
     // WMI関連
     void InitializeWMI();
     void CleanupWMI();
+    IWbemServices* GetWbemServices() const { return m_pWbemServices; }
     IWbemServices* m_pWbemServices;
     bool m_wmiInitialized;
 

@@ -1,4 +1,5 @@
 #include "MonitorController.h"
+#include "BrightnessSync.h"
 #include <memory>
 #include <physicalmonitorenumerationapi.h>
 #include <highlevelmonitorconfigurationapi.h>
@@ -19,6 +20,9 @@ MonitorController::MonitorController()
     }
 
     InitializeWMI();
+
+    // 輝度同期機能の初期化
+    m_brightnessSync = std::make_unique<BrightnessSync>(*this);
 }
 
 MonitorController::~MonitorController()
@@ -330,4 +334,56 @@ MonitorController::MonitorSettings MonitorController::LoadMonitorSettings(const 
     }
 
     return settings;
+}
+
+bool MonitorController::SetBrightness(HMONITOR hMonitor, int brightness)
+{
+    if (brightness < 0 || brightness > 100) {
+        return false;
+    }
+
+    try {
+        // Get physical monitor handle using RAII
+        std::unique_ptr<void, decltype(&DestroyPhysicalMonitor)> handle(
+            GetPhysicalMonitorHandle(hMonitor),
+            DestroyPhysicalMonitor
+        );
+
+        // Get brightness range
+        DWORD minBrightness = 0, currentBrightness = 0, maxBrightness = 0;
+        if (!GetMonitorBrightness(handle.get(), &minBrightness, &currentBrightness, &maxBrightness)) {
+            return false;
+        }
+
+        // Convert percentage to actual brightness value
+        DWORD newBrightness = minBrightness +
+            static_cast<DWORD>((maxBrightness - minBrightness) * brightness / 100.0);
+
+        // Set new brightness
+        if (!SetMonitorBrightness(handle.get(), newBrightness)) {
+            return false;
+        }
+
+        // システム輝度との同期
+        if (m_brightnessSync) {
+            m_brightnessSync->SyncToSystem(hMonitor, brightness);
+        }
+
+        return true;
+    }
+    catch (const WindowsApiException&) {
+        return false;
+    }
+}
+
+void MonitorController::EnableBrightnessSync(bool enable)
+{
+    if (m_brightnessSync) {
+        m_brightnessSync->EnableSync(enable);
+    }
+}
+
+bool MonitorController::IsBrightnessSyncEnabled() const
+{
+    return m_brightnessSync && m_brightnessSync->IsSyncEnabled();
 }
