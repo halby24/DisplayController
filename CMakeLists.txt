@@ -19,6 +19,8 @@ endif()
 set(SOURCES
     src/main.cpp
     src/MonitorController.cpp
+    src/SystemBrightnessMonitor.cpp
+    src/BrightnessSync.cpp
 )
 
 # Create executable
