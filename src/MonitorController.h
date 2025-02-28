@@ -28,6 +28,7 @@ public:
 
 class MonitorController
 {
+    friend class BrightnessSync;
 public:
     struct MonitorInfo
     {
