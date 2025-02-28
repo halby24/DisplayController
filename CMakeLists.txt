@@ -19,8 +19,7 @@ endif()
 set(SOURCES
     src/main.cpp
     src/MonitorController.cpp
-    src/SystemBrightnessMonitor.cpp
-    src/BrightnessSync.cpp
+    src/MonitorController.h
 )
 
 # Create executable
@@ -33,8 +32,8 @@ target_include_directories(DisplayController PRIVATE src)
 if(WIN32 AND MSVC)
     # Windows specific compiler flags
     target_compile_options(DisplayController PRIVATE
-        /utf-8     # Force UTF-8 encoding
-        /W4        # Warning level 4
+        /utf-8 # Force UTF-8 encoding
+        /W4 # Warning level 4
     )
 
     # Find Visual Studio installation
@@ -78,5 +77,5 @@ endif()
 
 # Link libraries
 target_link_libraries(DisplayController PRIVATE
-    wbemuuid     # WMI support
+    wbemuuid # WMI support
 )

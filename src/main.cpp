@@ -43,6 +43,18 @@ void PrintMonitorInfo(const MonitorController::MonitorInfo& info, MonitorControl
         std::cout << "  Brightness: " << settings.brightness << "%" << std::endl;
         std::cout << "  Contrast: " << settings.contrast << "%" << std::endl;
         std::cout << "  Color Temperature: " << settings.colorTemperature << "K" << std::endl;
+
+        // Display mapping configuration
+        auto mapping = controller.GetMappingConfig(info.id);
+        std::cout << "Brightness Mapping:" << std::endl;
+        std::cout << "  Min: " << mapping.minBrightness << "%" << std::endl;
+        std::cout << "  Max: " << mapping.maxBrightness << "%" << std::endl;
+        if (!mapping.mappingPoints.empty()) {
+            std::cout << "  Custom Points:" << std::endl;
+            for (const auto& point : mapping.mappingPoints) {
+                std::cout << "    " << point.first << "% -> " << point.second << "%" << std::endl;
+            }
+        }
     }
     catch (const WindowsApiException& e) {
         std::cout << "Detailed Info: Unable to retrieve (Error: " << e.what() << ")" << std::endl;
@@ -50,8 +62,8 @@ void PrintMonitorInfo(const MonitorController::MonitorInfo& info, MonitorControl
 
     // Get and display brightness
     try {
-        int brightness = controller.GetBrightness(info.hMonitor);
-        std::cout << "Brightness: " << brightness << "%" << std::endl;
+        int brightness = controller.GetBrightness(info.id);
+        std::cout << "Current Brightness: " << brightness << "%" << std::endl;
     }
     catch (const WindowsApiException& e) {
         std::cout << "Brightness: Unable to retrieve (Error: " << e.what() << ")" << std::endl;
@@ -59,7 +71,7 @@ void PrintMonitorInfo(const MonitorController::MonitorInfo& info, MonitorControl
 
     // Get and display monitor capabilities
     try {
-        auto caps = controller.GetMonitorCapabilities(info.hMonitor);
+        auto caps = controller.GetMonitorCapabilities(info.id);
         std::cout << "Display Technology: " << caps.technologyType << std::endl;
         std::cout << "Capabilities:" << std::endl;
         std::cout << "  - Brightness Control: " << (caps.supportsBrightness ? "Yes" : "No") << std::endl;
@@ -86,11 +98,13 @@ void PrintUsage()
     std::cout << "  list                        : モニター一覧の表示" << std::endl;
     std::cout << "  get <monitor_id>            : 指定モニターの輝度取得" << std::endl;
     std::cout << "  set <monitor_id> <value>    : 指定モニターの輝度設定" << std::endl;
-    std::cout << "  sync enable                 : 自動同期を有効化" << std::endl;
-    std::cout << "  sync disable                : 自動同期を無効化" << std::endl;
-    std::cout << "  sync status                 : 同期状態の表示" << std::endl;
-    std::cout << "  system-brightness get       : システムの輝度設定を取得" << std::endl;
-    std::cout << "  system-brightness set <value>: システムの輝度設定を変更" << std::endl;
+    std::cout << "  setall <value>              : 全モニターの輝度を統一的に設定" << std::endl;
+    std::cout << "  map <monitor_id> <options>  : モニターの輝度マッピング設定" << std::endl;
+    std::cout << "    options:" << std::endl;
+    std::cout << "      --min <value>           : 最小輝度値 (0-100)" << std::endl;
+    std::cout << "      --max <value>           : 最大輝度値 (0-100)" << std::endl;
+    std::cout << "      --point <in,out>        : マッピングポイントを追加 (複数指定可)" << std::endl;
+    std::cout << "      --reset                 : マッピング設定をリセット" << std::endl;
     std::cout << "  help                        : このヘルプを表示" << std::endl;
 }
 
@@ -126,82 +140,120 @@ int main(int argc, char* argv[])
                 PrintMonitorInfo(monitor, controller);
             }
         }
-        else if (command == "sync")
+        else if (command == "get")
         {
             if (argc < 3)
             {
-                std::cerr << "Error: sync command requires an action (enable/disable/status)" << std::endl;
+                std::cerr << "Error: get command requires a monitor ID" << std::endl;
                 return 1;
             }
 
-            std::string action = argv[2];
-            if (action == "enable")
+            auto monitors = controller.GetMonitors();
+            int monitorIndex = std::stoi(argv[2]);
+            if (monitorIndex < 0 || monitorIndex >= static_cast<int>(monitors.size()))
             {
-                controller.EnableBrightnessSync(true);
-                std::cout << "Brightness sync enabled" << std::endl;
+                std::cerr << "Error: Invalid monitor ID" << std::endl;
+                return 1;
             }
-            else if (action == "disable")
+
+            int brightness = controller.GetBrightness(monitors[monitorIndex].id);
+            std::cout << "Monitor " << monitorIndex << " brightness: " << brightness << "%" << std::endl;
+        }
+        else if (command == "set")
+        {
+            if (argc < 4)
             {
-                controller.EnableBrightnessSync(false);
-                std::cout << "Brightness sync disabled" << std::endl;
+                std::cerr << "Error: set command requires a monitor ID and brightness value" << std::endl;
+                return 1;
             }
-            else if (action == "status")
+
+            auto monitors = controller.GetMonitors();
+            int monitorIndex = std::stoi(argv[2]);
+            if (monitorIndex < 0 || monitorIndex >= static_cast<int>(monitors.size()))
             {
-                bool enabled = controller.IsBrightnessSyncEnabled();
-                std::cout << "Brightness sync is " << (enabled ? "enabled" : "disabled") << std::endl;
+                std::cerr << "Error: Invalid monitor ID" << std::endl;
+                return 1;
+            }
+
+            int brightness = std::stoi(argv[3]);
+            if (controller.SetBrightness(monitors[monitorIndex].id, brightness))
+            {
+                std::cout << "Monitor " << monitorIndex << " brightness set to " << brightness << "%" << std::endl;
             }
             else
             {
-                std::cerr << "Error: Invalid sync action. Use enable, disable, or status" << std::endl;
+                std::cerr << "Error: Failed to set brightness" << std::endl;
                 return 1;
             }
         }
-        else if (command == "system-brightness")
+        else if (command == "setall")
         {
             if (argc < 3)
             {
-                std::cerr << "Error: system-brightness command requires an action (get/set)" << std::endl;
+                std::cerr << "Error: setall command requires a brightness value" << std::endl;
                 return 1;
             }
 
-            std::string action = argv[2];
-            if (action == "get")
+            int brightness = std::stoi(argv[2]);
+            if (controller.SetUnifiedBrightness(brightness))
             {
-                auto monitors = controller.GetMonitors();
-                if (!monitors.empty())
-                {
-                    int brightness = controller.GetBrightness(monitors[0].hMonitor);
-                    std::cout << "System brightness: " << brightness << "%" << std::endl;
-                }
-            }
-            else if (action == "set")
-            {
-                if (argc < 4)
-                {
-                    std::cerr << "Error: system-brightness set requires a value (0-100)" << std::endl;
-                    return 1;
-                }
-
-                int brightness = std::stoi(argv[3]);
-                auto monitors = controller.GetMonitors();
-                if (!monitors.empty())
-                {
-                    if (controller.SetBrightness(monitors[0].hMonitor, brightness))
-                    {
-                        std::cout << "System brightness set to " << brightness << "%" << std::endl;
-                    }
-                    else
-                    {
-                        std::cerr << "Error: Failed to set system brightness" << std::endl;
-                        return 1;
-                    }
-                }
+                std::cout << "All monitors brightness set to " << brightness << "%" << std::endl;
             }
             else
             {
-                std::cerr << "Error: Invalid system-brightness action. Use get or set" << std::endl;
+                std::cerr << "Error: Failed to set brightness for some monitors" << std::endl;
                 return 1;
             }
+        }
+        else if (command == "map")
+        {
+            if (argc < 4)
+            {
+                std::cerr << "Error: map command requires a monitor ID and options" << std::endl;
+                return 1;
+            }
+
+            auto monitors = controller.GetMonitors();
+            int monitorIndex = std::stoi(argv[2]);
+            if (monitorIndex < 0 || monitorIndex >= static_cast<int>(monitors.size()))
+            {
+                std::cerr << "Error: Invalid monitor ID" << std::endl;
+                return 1;
+            }
+
+            MonitorId id = monitors[monitorIndex].id;
+            MappingConfig config = controller.GetMappingConfig(id);
+
+            for (int i = 3; i < argc; i++)
+            {
+                std::string option = argv[i];
+                if (option == "--min" && i + 1 < argc)
+                {
+                    config.minBrightness = std::stoi(argv[++i]);
+                }
+                else if (option == "--max" && i + 1 < argc)
+                {
+                    config.maxBrightness = std::stoi(argv[++i]);
+                }
+                else if (option == "--point" && i + 1 < argc)
+                {
+                    std::string point = argv[++i];
+                    size_t comma = point.find(',');
+                    if (comma != std::string::npos)
+                    {
+                        int in = std::stoi(point.substr(0, comma));
+                        int out = std::stoi(point.substr(comma + 1));
+                        config.mappingPoints.push_back({in, out});
+                    }
+                }
+                else if (option == "--reset")
+                {
+                    config = MappingConfig();
+                }
+            }
+
+            controller.SetMappingConfig(id, config);
+            std::cout << "Mapping configuration updated for monitor " << monitorIndex << std::endl;
         }
         else
         {
