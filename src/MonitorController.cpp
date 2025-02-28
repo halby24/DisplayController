@@ -1,4 +1,5 @@
 #include "MonitorController.h"
+#include <windows.h>
 #include <memory>
 #include <physicalmonitorenumerationapi.h>
 #include <highlevelmonitorconfigurationapi.h>
@@ -24,7 +25,7 @@ MonitorController::~MonitorController() noexcept = default;
 std::vector<MonitorId> MonitorController::EnumerateMonitors()
 {
     std::vector<MonitorId> monitors;
-    if (!EnumDisplayMonitors(nullptr, nullptr,
+    if (!::EnumDisplayMonitors(nullptr, nullptr,
         [](HMONITOR hMonitor, HDC, LPRECT, LPARAM dwData) -> BOOL {
             auto monitors = reinterpret_cast<std::vector<MonitorId>*>(dwData);
             monitors->push_back(hMonitor);
@@ -40,7 +41,7 @@ std::vector<MonitorId> MonitorController::EnumerateMonitors()
 bool MonitorController::GetMonitorInfo(MonitorId id, std::wstring& name, bool& isPrimary)
 {
     MONITORINFOEXW monitorInfo = { sizeof(MONITORINFOEXW) };
-    if (!GetMonitorInfoW(id, &monitorInfo)) {
+    if (!::GetMonitorInfoW(id, reinterpret_cast<LPMONITORINFO>(&monitorInfo))) {
         return false;
     }
 
@@ -125,7 +126,7 @@ bool MonitorController::SetBrightness(MonitorId id, int brightness)
 
         // Get brightness range
         DWORD minBrightness = 0, currentBrightness = 0, maxBrightness = 0;
-        if (!GetMonitorBrightness(handle.get(), &minBrightness, &currentBrightness, &maxBrightness)) {
+        if (!::GetMonitorBrightness(handle.get(), &minBrightness, &currentBrightness, &maxBrightness)) {
             return false;
         }
 
@@ -155,7 +156,7 @@ int MonitorController::GetBrightness(MonitorId id)
 
         // Get current brightness
         DWORD minBrightness = 0, currentBrightness = 0, maxBrightness = 0;
-        if (!GetMonitorBrightness(handle.get(), &minBrightness, &currentBrightness, &maxBrightness)) {
+        if (!::GetMonitorBrightness(handle.get(), &minBrightness, &currentBrightness, &maxBrightness)) {
             return 0;
         }
 
@@ -202,7 +203,7 @@ BOOL CALLBACK MonitorController::MonitorEnumProc(HMONITOR hMonitor, HDC hdcMonit
     auto monitors = reinterpret_cast<std::vector<MonitorInfo>*>(dwData);
 
     MONITORINFOEXW monitorInfo = { sizeof(MONITORINFOEXW) };
-    if (!GetMonitorInfoW(hMonitor, &monitorInfo)) {
+    if (!::GetMonitorInfoW(hMonitor, reinterpret_cast<LPMONITORINFO>(&monitorInfo))) {
         return TRUE; // Continue enumeration even if we fail to get info for one monitor
     }
 
@@ -219,8 +220,8 @@ BOOL CALLBACK MonitorController::MonitorEnumProc(HMONITOR hMonitor, HDC hdcMonit
 HANDLE MonitorController::GetPhysicalMonitorHandle(MonitorId id)
 {
     DWORD numberOfPhysicalMonitors = 0;
-    if (!GetNumberOfPhysicalMonitorsFromHMONITOR(id, &numberOfPhysicalMonitors)) {
-        throw WindowsApiException("Failed to get number of physical monitors: " + std::to_string(GetLastError()));
+    if (!::GetNumberOfPhysicalMonitorsFromHMONITOR(id, &numberOfPhysicalMonitors)) {
+        throw WindowsApiException("Failed to get number of physical monitors: " + std::to_string(::GetLastError()));
     }
 
     if (numberOfPhysicalMonitors == 0) {
@@ -228,11 +229,18 @@ HANDLE MonitorController::GetPhysicalMonitorHandle(MonitorId id)
     }
 
     std::vector<PHYSICAL_MONITOR> physicalMonitors(numberOfPhysicalMonitors);
-    if (!GetPhysicalMonitorsFromHMONITOR(id, numberOfPhysicalMonitors, physicalMonitors.data())) {
-        throw WindowsApiException("Failed to get physical monitors: " + std::to_string(GetLastError()));
+    if (!::GetPhysicalMonitorsFromHMONITOR(id, numberOfPhysicalMonitors, physicalMonitors.data())) {
+        throw WindowsApiException("Failed to get physical monitors: " + std::to_string(::GetLastError()));
     }
 
-    return physicalMonitors[0].hPhysicalMonitor;
+    HANDLE handle = physicalMonitors[0].hPhysicalMonitor;
+
+    // Clean up the remaining handles if any
+    for (DWORD i = 1; i < numberOfPhysicalMonitors; ++i) {
+        DestroyPhysicalMonitor(physicalMonitors[i].hPhysicalMonitor);
+    }
+
+    return handle;
 }
 
 MonitorController::MonitorCapabilities MonitorController::GetMonitorCapabilities(MonitorId id)
@@ -254,23 +262,23 @@ MonitorController::MonitorCapabilities MonitorController::GetMonitorCapabilities
 
         // Test brightness control
         DWORD minValue = 0, currentValue = 0, maxValue = 0;
-        if (GetMonitorBrightness(handle.get(), &minValue, &currentValue, &maxValue)) {
+        if (::GetMonitorBrightness(handle.get(), &minValue, &currentValue, &maxValue)) {
             caps.supportsBrightness = true;
         }
 
         // Test contrast control
-        if (GetMonitorContrast(handle.get(), &minValue, &currentValue, &maxValue)) {
+        if (::GetMonitorContrast(handle.get(), &minValue, &currentValue, &maxValue)) {
             caps.supportsContrast = true;
         }
 
         // Get display size using DPI
         MONITORINFOEXW monitorInfo = { sizeof(MONITORINFOEXW) };
-        if (GetMonitorInfoW(id, &monitorInfo)) {
-            HDC hdc = CreateDCW(L"DISPLAY", monitorInfo.szDevice, nullptr, nullptr);
+        if (::GetMonitorInfoW(id, reinterpret_cast<LPMONITORINFO>(&monitorInfo))) {
+            HDC hdc = ::CreateDCW(L"DISPLAY", monitorInfo.szDevice, nullptr, nullptr);
             if (hdc) {
-                caps.displaySize.cx = GetDeviceCaps(hdc, HORZSIZE);  // Physical width (mm)
-                caps.displaySize.cy = GetDeviceCaps(hdc, VERTSIZE);  // Physical height (mm)
-                DeleteDC(hdc);
+                caps.displaySize.cx = ::GetDeviceCaps(hdc, HORZSIZE);  // Physical width (mm)
+                caps.displaySize.cy = ::GetDeviceCaps(hdc, VERTSIZE);  // Physical height (mm)
+                ::DeleteDC(hdc);
             }
         }
     }
@@ -300,44 +308,87 @@ std::wstring MonitorController::GetSettingsFilePath(const MonitorInfo& info) con
 
 void MonitorController::SaveMonitorSettings(const MonitorInfo& info, const MonitorSettings& settings)
 {
-    std::wstring filepath = GetSettingsFilePath(info);
-    std::ofstream file(filepath);
-    if (!file) {
-        throw DisplayControllerException("Failed to open settings file for writing");
-    }
+    try {
+        std::filesystem::path filepath = GetSettingsFilePath(info);
+        std::ofstream file(filepath, std::ios::out | std::ios::binary);
+        if (!file) {
+            throw DisplayControllerException("Failed to open settings file for writing: " + filepath.string());
+        }
 
-    // JSON形式で設定を保存
-    file << "{\n";
-    file << "  \"brightness\": " << settings.brightness << ",\n";
-    file << "  \"contrast\": " << settings.contrast << ",\n";
-    file << "  \"colorTemperature\": " << settings.colorTemperature << "\n";
-    file << "}\n";
+        // JSON形式で設定を保存（整形して見やすく）
+        file << "{\n"
+             << "  \"brightness\": " << settings.brightness << ",\n"
+             << "  \"contrast\": " << settings.contrast << ",\n"
+             << "  \"colorTemperature\": " << settings.colorTemperature << "\n"
+             << "}\n";
+
+        if (!file) {
+            throw DisplayControllerException("Failed to write settings to file: " + filepath.string());
+        }
+    }
+    catch (const std::exception& e) {
+        throw DisplayControllerException(std::string("Failed to save monitor settings: ") + e.what());
+    }
 }
 
 MonitorController::MonitorSettings MonitorController::LoadMonitorSettings(const MonitorInfo& info)
 {
-    std::wstring filepath = GetSettingsFilePath(info);
-    std::ifstream file(filepath);
     MonitorSettings settings = {};
+    try {
+        std::filesystem::path filepath = GetSettingsFilePath(info);
+        if (!std::filesystem::exists(filepath)) {
+            return settings; // ファイルが存在しない場合はデフォルト設定を返す
+        }
 
-    if (file) {
-        std::string line;
+        std::ifstream file(filepath, std::ios::in | std::ios::binary);
+        if (!file) {
+            throw DisplayControllerException("Failed to open settings file for reading: " + filepath.string());
+        }
+
         std::string json;
+        std::string line;
         while (std::getline(file, line)) {
-            json += line;
+            json += line + "\n";
         }
 
-        // 簡易的なJSONパース（実際の実装ではJSON parserライブラリを使用することを推奨）
-        size_t pos;
-        if ((pos = json.find("\"brightness\":")) != std::string::npos) {
-            settings.brightness = std::stoi(json.substr(pos + 12));
+        if (!file.eof() && file.fail()) {
+            throw DisplayControllerException("Failed to read settings file: " + filepath.string());
         }
-        if ((pos = json.find("\"contrast\":")) != std::string::npos) {
-            settings.contrast = std::stoi(json.substr(pos + 10));
+
+        // JSONパースを改善（エラーチェックを追加）
+        auto parseValue = [](const std::string& json, const std::string& key, size_t startPos) -> std::string {
+            size_t pos = json.find("\"" + key + "\":", startPos);
+            if (pos == std::string::npos) return "";
+
+            pos = json.find_first_not_of(" \t\n\r", pos + key.length() + 2);
+            if (pos == std::string::npos) return "";
+
+            size_t endPos = json.find_first_of(",}\n", pos);
+            if (endPos == std::string::npos) return "";
+
+            return json.substr(pos, endPos - pos);
+        };
+
+        try {
+            std::string value;
+            if (!(value = parseValue(json, "brightness", 0)).empty()) {
+                settings.brightness = std::stoi(value);
+            }
+            if (!(value = parseValue(json, "contrast", 0)).empty()) {
+                settings.contrast = std::stoi(value);
+            }
+            if (!(value = parseValue(json, "colorTemperature", 0)).empty()) {
+                settings.colorTemperature = std::stoul(value);
+            }
         }
-        if ((pos = json.find("\"colorTemperature\":")) != std::string::npos) {
-            settings.colorTemperature = std::stoul(json.substr(pos + 17));
+        catch (const std::exception& e) {
+            throw DisplayControllerException(std::string("Failed to parse settings value: ") + e.what());
         }
+    }
+    catch (const std::exception& e) {
+        // エラーをログに記録するなどの処理を追加可能
+        // ここではデフォルト設定を返す
+        return settings;
     }
 
     return settings;
