@@ -189,10 +189,20 @@ target_link_libraries(DisplayController PRIVATE
     wbemuuid # WMI support
 )
 
-# Copy SwitchBotLightSensor.dll to BrightnessDaemon output directory
+# Copy required DLLs to BrightnessDaemon output directory
 add_custom_command(TARGET BrightnessDaemon POST_BUILD
+    # Copy SwitchBotLightSensor.dll
     COMMAND ${CMAKE_COMMAND} -E copy_if_different
         $<TARGET_FILE:SwitchBotLightSensor>
         $<TARGET_FILE_DIR:BrightnessDaemon>
-    COMMENT "Copying SwitchBotLightSensor.dll to BrightnessDaemon directory"
+
+    # Copy DisplayControllerLib.dll
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        $<TARGET_FILE:DisplayControllerLib>
+        $<TARGET_FILE_DIR:BrightnessDaemon>
+
+    COMMENT "Copying project DLLs to BrightnessDaemon directory"
 )
+
+# Enable automatic DLL copy for vcpkg dependencies
+set_target_properties(BrightnessDaemon PROPERTIES VS_DEBUGGER_ENVIRONMENT "PATH=$(VC_ExecutablePath_x64);$(PATH)")
