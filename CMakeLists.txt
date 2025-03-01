@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.10)
+cmake_minimum_required(VERSION 3.15)
 
 # Set build directory if not already set
 if(NOT CMAKE_BINARY_DIR)
@@ -21,6 +21,10 @@ if(WIN32)
     set(CMAKE_SYSTEM_VERSION "10.0")
 endif()
 
+# Find required packages
+find_package(CURL REQUIRED)
+find_package(OpenSSL REQUIRED)
+
 # Add library source files
 set(LIB_SOURCES
     src/MonitorController.cpp
@@ -36,6 +40,9 @@ set(DAEMON_SOURCES
     src/DummyLightSensor.h
     src/ILightSensor.h
 )
+
+# Add SwitchBot Light Sensor
+add_subdirectory(SwitchBotLightSensor)
 
 # Create library as DLL
 add_library(DisplayControllerLib SHARED ${LIB_SOURCES})
@@ -61,11 +68,17 @@ target_link_libraries(DisplayController PRIVATE DisplayControllerLib)
 
 # Create daemon executable
 add_executable(BrightnessDaemon WIN32 ${DAEMON_SOURCES})
-target_link_libraries(BrightnessDaemon PRIVATE DisplayControllerLib nlohmann_json::nlohmann_json)
+target_link_libraries(BrightnessDaemon
+    PRIVATE
+        DisplayControllerLib
+        nlohmann_json::nlohmann_json
+        SwitchBotLightSensor
+)
 target_include_directories(BrightnessDaemon
     PRIVATE
         src
         ThirdPartyLib/nlohmann_json/include
+        SwitchBotLightSensor/include
 )
 
 # Add Windows specific settings for BrightnessDaemon
@@ -97,18 +110,10 @@ if(WIN32 AND MSVC)
     )
 endif()
 
-# Typically you don't care so much for a third party library's tests to be
-# run from your own project's code.
+# Disable JSON library tests
 set(JSON_BuildTests OFF CACHE INTERNAL "")
 
-# If you only include this third party in PRIVATE source files, you do not
-# need to install it when your main project gets installed.
-# set(JSON_Install OFF CACHE INTERNAL "")
-
-# Don't use include(nlohmann_json/CMakeLists.txt) since that carries with it
-# unintended consequences that will break the build.  It's generally
-# discouraged (although not necessarily well documented as such) to use
-# include(...) for pulling in other CMake projects anyways.
+# Add nlohmann_json
 add_subdirectory(ThirdPartyLib/nlohmann_json)
 
 target_include_directories(DisplayController PRIVATE ThirdPartyLib/nlohmann_json/include)

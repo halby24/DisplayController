@@ -1,9 +1,12 @@
 #include <windows.h>
 #include <shellapi.h>
+#include <fstream>
 #include "BrightnessManager.h"
 #include "DummyLightSensor.h"
+#include "SwitchBotLightSensor.h"
 #include <memory>
 #include <string>
+#include <nlohmann/json.hpp>
 
 // タスクトレイアイコンの定数
 #define WM_APP_NOTIFY (WM_APP + 1)
@@ -25,6 +28,51 @@ void InitializeTrayIcon();
 void ShowContextMenu(HWND hwnd, POINT pt);
 void ToggleSync();
 void Cleanup();
+std::unique_ptr<ILightSensor> CreateLightSensor();
+
+// 設定ファイルから認証情報を読み込む
+std::pair<std::string, std::string> LoadSwitchBotConfig()
+{
+    try {
+        std::ifstream file("switchbot_config.json");
+        if (!file.is_open()) {
+            MessageBox(NULL, L"設定ファイルが見つかりません", L"警告", MB_OK | MB_ICONWARNING);
+            return {"", ""};
+        }
+
+        nlohmann::json config = nlohmann::json::parse(file);
+        return {
+            config.value("token", ""),
+            config.value("deviceId", "")
+        };
+    }
+    catch (const std::exception& e) {
+        std::string error = "設定ファイルの読み込みに失敗しました: ";
+        error += e.what();
+        MessageBoxA(NULL, error.c_str(), "エラー", MB_OK | MB_ICONERROR);
+        return {"", ""};
+    }
+}
+
+// センサーの作成
+std::unique_ptr<ILightSensor> CreateLightSensor()
+{
+    auto [token, deviceId] = LoadSwitchBotConfig();
+    if (!token.empty() && !deviceId.empty()) {
+        try {
+            return std::make_unique<SwitchBotLightSensor>(token, deviceId);
+        }
+        catch (const std::exception& e) {
+            std::string error = "SwitchBotの初期化に失敗しました: ";
+            error += e.what();
+            MessageBoxA(NULL, error.c_str(), "エラー", MB_OK | MB_ICONWARNING);
+        }
+    }
+
+    // 設定が無効な場合やエラーが発生した場合はダミーセンサーを使用
+    MessageBox(NULL, L"ダミーセンサーを使用します", L"情報", MB_OK | MB_ICONINFORMATION);
+    return std::make_unique<DummyLightSensor>();
+}
 
 int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nCmdShow)
 {
@@ -45,9 +93,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
     InitializeTrayIcon();
 
     // BrightnessManagerの初期化
-    g_brightnessManager = std::make_unique<BrightnessManager>(
-        std::make_unique<DummyLightSensor>()
-    );
+    g_brightnessManager = std::make_unique<BrightnessManager>(CreateLightSensor());
 
     // メッセージループ
     MSG msg = {};

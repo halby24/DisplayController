@@ -1,0 +1,150 @@
+#include "HttpClient.h"
+#include <curl/curl.h>
+#include <sstream>
+#include <chrono>
+#include <random>
+#include <openssl/hmac.h>
+#include <openssl/sha.h>
+
+namespace {
+    // レスポンスデータを格納するコールバック関数
+    size_t WriteCallback(void* contents, size_t size, size_t nmemb, std::string* userp) {
+        userp->append((char*)contents, size * nmemb);
+        return size * nmemb;
+    }
+
+    // Base64エンコード
+    std::string Base64Encode(const unsigned char* input, size_t length) {
+        static const std::string base64_chars =
+            "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+            "abcdefghijklmnopqrstuvwxyz"
+            "0123456789+/";
+
+        std::string ret;
+        int i = 0;
+        int j = 0;
+        unsigned char char_array_3[3];
+        unsigned char char_array_4[4];
+
+        while (length--) {
+            char_array_3[i++] = *(input++);
+            if (i == 3) {
+                char_array_4[0] = (char_array_3[0] & 0xfc) >> 2;
+                char_array_4[1] = ((char_array_3[0] & 0x03) << 4) + ((char_array_3[1] & 0xf0) >> 4);
+                char_array_4[2] = ((char_array_3[1] & 0x0f) << 2) + ((char_array_3[2] & 0xc0) >> 6);
+                char_array_4[3] = char_array_3[2] & 0x3f;
+
+                for(i = 0; i < 4; i++)
+                    ret += base64_chars[char_array_4[i]];
+                i = 0;
+            }
+        }
+
+        if (i) {
+            for(j = i; j < 3; j++)
+                char_array_3[j] = '\0';
+
+            char_array_4[0] = (char_array_3[0] & 0xfc) >> 2;
+            char_array_4[1] = ((char_array_3[0] & 0x03) << 4) + ((char_array_3[1] & 0xf0) >> 4);
+            char_array_4[2] = ((char_array_3[1] & 0x0f) << 2) + ((char_array_3[2] & 0xc0) >> 6);
+
+            for (j = 0; j < i + 1; j++)
+                ret += base64_chars[char_array_4[j]];
+
+            while((i++ < 3))
+                ret += '=';
+        }
+
+        return ret;
+    }
+}
+
+HttpClient::HttpClient(const std::string& token)
+    : m_token(token)
+    , m_curl(nullptr)
+{
+    Initialize();
+}
+
+HttpClient::~HttpClient() {
+    Cleanup();
+}
+
+void HttpClient::Initialize() {
+    curl_global_init(CURL_GLOBAL_DEFAULT);
+    m_curl = curl_easy_init();
+    if (!m_curl) {
+        throw HttpException("Failed to initialize CURL");
+    }
+}
+
+void HttpClient::Cleanup() {
+    if (m_curl) {
+        curl_easy_cleanup(m_curl);
+        m_curl = nullptr;
+    }
+    curl_global_cleanup();
+}
+
+std::string HttpClient::GetTimestamp() {
+    auto now = std::chrono::system_clock::now();
+    auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(now.time_since_epoch());
+    return std::to_string(ms.count());
+}
+
+void HttpClient::SetupHeaders(void* request, const std::string& signature, const std::string& nonce) {
+    struct curl_slist* headers = nullptr;
+    headers = curl_slist_append(headers, ("Authorization: Bearer " + m_token).c_str());
+    headers = curl_slist_append(headers, "Content-Type: application/json");
+    headers = curl_slist_append(headers, ("t: " + GetTimestamp()).c_str());
+    headers = curl_slist_append(headers, ("sign: " + signature).c_str());
+    headers = curl_slist_append(headers, ("nonce: " + nonce).c_str());
+
+    curl_easy_setopt(request, CURLOPT_HTTPHEADER, headers);
+}
+
+nlohmann::json HttpClient::Get(const std::string& endpoint) {
+    if (!m_curl) {
+        throw HttpException("CURL not initialized");
+    }
+
+    // ランダムなnonceを生成
+    std::random_device rd;
+    std::mt19937 gen(rd());
+    std::uniform_int_distribution<> dis(0, 999999);
+    std::string nonce = std::to_string(dis(gen));
+
+    // 署名を生成
+    std::string timestamp = GetTimestamp();
+    std::string signStr = m_token + timestamp + nonce;
+    unsigned char hash[SHA256_DIGEST_LENGTH];
+    HMAC(EVP_sha256(), m_token.c_str(), m_token.length(),
+         (unsigned char*)signStr.c_str(), signStr.length(), hash, nullptr);
+    std::string signature = Base64Encode(hash, SHA256_DIGEST_LENGTH);
+
+    std::string response_string;
+    curl_easy_setopt(m_curl, CURLOPT_URL, endpoint.c_str());
+    curl_easy_setopt(m_curl, CURLOPT_WRITEFUNCTION, WriteCallback);
+    curl_easy_setopt(m_curl, CURLOPT_WRITEDATA, &response_string);
+    curl_easy_setopt(m_curl, CURLOPT_SSL_VERIFYPEER, 1L);
+    curl_easy_setopt(m_curl, CURLOPT_SSL_VERIFYHOST, 2L);
+
+    SetupHeaders(m_curl, signature, nonce);
+
+    CURLcode res = curl_easy_perform(m_curl);
+    if (res != CURLE_OK) {
+        throw HttpException(std::string("CURL request failed: ") + curl_easy_strerror(res));
+    }
+
+    long http_code = 0;
+    curl_easy_getinfo(m_curl, CURLINFO_RESPONSE_CODE, &http_code);
+    if (http_code != 200) {
+        throw HttpException("HTTP request failed with code: " + std::to_string(http_code));
+    }
+
+    try {
+        return nlohmann::json::parse(response_string);
+    } catch (const nlohmann::json::parse_error& e) {
+        throw HttpException(std::string("Failed to parse JSON response: ") + e.what());
+    }
+}
