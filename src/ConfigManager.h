@@ -17,10 +17,12 @@ public:
 
     // 設定値の取得
     std::string GetSwitchBotToken() const;
+    std::string GetSwitchBotSecret() const;
     std::string GetDeviceId(const std::string& name) const;
 
     // 設定値の設定
     void SetSwitchBotToken(const std::string& token);
+    void SetSwitchBotSecret(const std::string& secret);
     void AddDevice(const std::string& id, const std::string& name, const std::string& type);
 
 private:

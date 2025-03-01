@@ -21,14 +21,18 @@ SwitchBotLightSensor::SwitchBotLightSensor(const std::string& deviceName)
         // 設定を読み込み
         m_config.Load();
 
-        // APIトークンを取得して初期化
+        // APIトークンとシークレットを取得して初期化
         std::string token = m_config.GetSwitchBotToken();
+        std::string secret = m_config.GetSwitchBotSecret();
         if (token.empty()) {
             throw ConfigurationException("SwitchBot API token not configured");
         }
+        if (secret.empty()) {
+            throw ConfigurationException("SwitchBot API secret not configured");
+        }
 
         // HTTPクライアントを初期化
-        m_httpClient = std::make_unique<HttpClient>(token);
+        m_httpClient = std::make_unique<HttpClient>(token, secret);
     }
     catch (const ConfigException& e) {
         throw ConfigurationException(std::string("Failed to load configuration: ") + e.what());

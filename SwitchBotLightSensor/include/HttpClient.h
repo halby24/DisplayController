@@ -6,13 +6,14 @@
 
 class HttpClient {
 public:
-    HttpClient(const std::string& token);
+    HttpClient(const std::string& token, const std::string& secret);
     ~HttpClient();
 
     nlohmann::json Get(const std::string& endpoint);
 
 private:
     std::string m_token;
+    std::string m_secret;
     void* m_curl;  // CURL*のハンドル
 
     void SetupHeaders(void* request, const std::string& signature, const std::string& nonce);

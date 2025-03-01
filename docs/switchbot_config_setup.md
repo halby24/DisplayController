@@ -21,7 +21,7 @@ BrightnessDaemonがSwitchBotの照度センサーと連携するために必要�
 
 1. 以下のパスに設定ファイルを作成:
    ```
-   %APPDATA%\DisplayController\config.json
+   %LOCALAPPDATA%\DisplayController\Settings\config.json
    ```
 
 2. 以下の形式で設定を記述:

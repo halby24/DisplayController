@@ -59,8 +59,9 @@ namespace {
     }
 }
 
-HttpClient::HttpClient(const std::string& token)
+HttpClient::HttpClient(const std::string& token, const std::string& secret)
     : m_token(token)
+    , m_secret(secret)
     , m_curl(nullptr)
 {
     Initialize();
@@ -118,7 +119,7 @@ nlohmann::json HttpClient::Get(const std::string& endpoint) {
     std::string timestamp = GetTimestamp();
     std::string signStr = m_token + timestamp + nonce;
     unsigned char hash[SHA256_DIGEST_LENGTH];
-    HMAC(EVP_sha256(), m_token.c_str(), m_token.length(),
+    HMAC(EVP_sha256(), m_secret.c_str(), m_secret.length(),
          (unsigned char*)signStr.c_str(), signStr.length(), hash, nullptr);
     std::string signature = Base64Encode(hash, SHA256_DIGEST_LENGTH);
 

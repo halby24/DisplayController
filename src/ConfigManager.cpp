@@ -5,15 +5,15 @@
 #include <windows.h>
 
 namespace {
-    // APPDATAフォルダのパスを取得
+    // LocalAppDataフォルダのパスを取得
     std::string GetAppDataPath() {
         PWSTR path;
-        if (FAILED(SHGetKnownFolderPath(FOLDERID_RoamingAppData, 0, nullptr, &path))) {
-            throw ConfigException("Failed to get AppData path");
+        if (FAILED(SHGetKnownFolderPath(FOLDERID_LocalAppData, 0, nullptr, &path))) {
+            throw ConfigException("Failed to get LocalAppData path");
         }
         std::wstring widePath(path);
         CoTaskMemFree(path);
-        return std::string(widePath.begin(), widePath.end()) + "\\DisplayController";
+        return std::string(widePath.begin(), widePath.end()) + "\\DisplayController\\Settings";
     }
 }
 
@@ -39,6 +39,7 @@ void ConfigManager::CreateDefaultConfig() {
     m_config = {
         {"switchbot", {
             {"token", ""},
+            {"secret", ""},
             {"devices", nlohmann::json::array()}
         }}
     };
@@ -53,6 +54,9 @@ void ConfigManager::ValidateConfig() const {
     const auto& switchbot = m_config["switchbot"];
     if (!switchbot.contains("token")) {
         throw ConfigException("Invalid config: 'token' field missing");
+    }
+    if (!switchbot.contains("secret")) {
+        throw ConfigException("Invalid config: 'secret' field missing");
     }
     if (!switchbot.contains("devices")) {
         throw ConfigException("Invalid config: 'devices' field missing");
@@ -108,6 +112,13 @@ std::string ConfigManager::GetSwitchBotToken() const {
     return m_config["switchbot"]["token"];
 }
 
+std::string ConfigManager::GetSwitchBotSecret() const {
+    if (!m_isLoaded) {
+        throw ConfigException("Config not loaded");
+    }
+    return m_config["switchbot"]["secret"];
+}
+
 std::string ConfigManager::GetDeviceId(const std::string& name) const {
     if (!m_isLoaded) {
         throw ConfigException("Config not loaded");
@@ -127,6 +138,14 @@ void ConfigManager::SetSwitchBotToken(const std::string& token) {
         throw ConfigException("Token cannot be empty");
     }
     m_config["switchbot"]["token"] = token;
+    Save();
+}
+
+void ConfigManager::SetSwitchBotSecret(const std::string& secret) {
+    if (secret.empty()) {
+        throw ConfigException("Secret cannot be empty");
+    }
+    m_config["switchbot"]["secret"] = secret;
     Save();
 }
 
