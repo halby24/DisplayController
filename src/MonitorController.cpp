@@ -9,6 +9,12 @@
 #pragma comment(lib, "Dxva2.lib")
 #pragma comment(lib, "Shell32.lib")
 
+// Windows API関数の宣言
+extern "C" {
+    BOOL WINAPI SetMonitorBrightness(HANDLE hMonitor, DWORD dwNewBrightness);
+    BOOL WINAPI DestroyPhysicalMonitor(HANDLE hMonitor);
+}
+
 MonitorController::MonitorController()
 {
     // 設定ファイルのベースディレクトリを設定
@@ -16,6 +22,7 @@ MonitorController::MonitorController()
     if (SUCCEEDED(SHGetFolderPathW(nullptr, CSIDL_LOCAL_APPDATA, nullptr, 0, appDataPath))) {
         m_settingsPath = std::filesystem::path(appDataPath) / L"DisplayController" / L"Settings";
         std::filesystem::create_directories(m_settingsPath);
+        LoadMappingConfigs(); // 設定ファイルからマッピング設定を読み込む
     }
 }
 
@@ -99,6 +106,111 @@ int MonitorController::MapBrightness(MonitorId id, int normalizedBrightness)
 void MonitorController::SetMappingConfig(MonitorId id, const MappingConfig& config)
 {
     m_mappingConfigs[id] = config;
+    SaveMappingConfig(id, config); // 設定をファイルに保存
+}
+
+std::wstring MonitorController::GetMappingConfigFilePath(MonitorId id) const
+{
+    // モニターIDを使用してユニークなファイル名を生成
+    std::wstring filename = L"mapping_" + std::to_wstring(reinterpret_cast<uintptr_t>(id)) + L".json";
+    return (m_settingsPath / filename).wstring();
+}
+
+void MonitorController::SaveMappingConfig(MonitorId id, const MappingConfig& config)
+{
+    try {
+        std::filesystem::path filepath = GetMappingConfigFilePath(id);
+
+        // nlohmann::jsonオブジェクトを作成
+        nlohmann::json j;
+        j["minBrightness"] = config.minBrightness;
+        j["maxBrightness"] = config.maxBrightness;
+
+        // マッピングポイントの配列を作成
+        nlohmann::json points = nlohmann::json::array();
+        for (const auto& point : config.mappingPoints) {
+            points.push_back({
+                {"input", point.first},
+                {"output", point.second}
+            });
+        }
+        j["mappingPoints"] = points;
+
+        // JSONをファイルに書き込み（整形して見やすく）
+        std::ofstream file(filepath);
+        if (!file) {
+            throw DisplayControllerException("Failed to open mapping config file for writing: " + filepath.string());
+        }
+
+        file << j.dump(2); // インデント2でフォーマット
+        file.flush();
+
+        if (!file) {
+            throw DisplayControllerException("Failed to write mapping config to file: " + filepath.string());
+        }
+    }
+    catch (const std::exception& e) {
+        throw DisplayControllerException(std::string("Failed to save mapping config: ") + e.what());
+    }
+}
+void MonitorController::LoadMappingConfigs()
+{
+    try {
+        // 既存のモニターを列挙
+        auto monitors = EnumerateMonitors();
+
+        for (const auto& id : monitors) {
+            std::filesystem::path filepath = GetMappingConfigFilePath(id);
+            if (!std::filesystem::exists(filepath)) {
+                continue; // 設定ファイルが存在しない場合はスキップ
+            }
+
+            std::ifstream file(filepath);
+            if (!file) {
+                continue; // ファイルが開けない場合はスキップ
+            }
+
+            try {
+                // JSONをパース
+                nlohmann::json j = nlohmann::json::parse(file);
+
+                MappingConfig config;
+
+                // 基本設定の読み込み
+                if (j.contains("minBrightness")) {
+                    config.minBrightness = j["minBrightness"].get<int>();
+                }
+                if (j.contains("maxBrightness")) {
+                    config.maxBrightness = j["maxBrightness"].get<int>();
+                }
+
+                // マッピングポイントの読み込み
+                if (j.contains("mappingPoints") && j["mappingPoints"].is_array()) {
+                    for (const auto& point : j["mappingPoints"]) {
+                        if (point.contains("input") && point.contains("output")) {
+                            config.mappingPoints.emplace_back(
+                                point["input"].get<int>(),
+                                point["output"].get<int>()
+                            );
+                        }
+                    }
+                }
+
+                m_mappingConfigs[id] = config;
+            }
+            catch (const nlohmann::json::exception&) {
+                // JSONパースエラーの場合は該当モニターの設定をスキップ
+                continue;
+            }
+            catch (const std::exception&) {
+                // その他のエラーの場合も該当モニターの設定をスキップ
+                continue;
+            }
+        }
+    }
+    catch (const std::exception&) {
+        // エラーが発生した場合は設定の読み込みを中止
+    }
 }
 
 MappingConfig MonitorController::GetMappingConfig(MonitorId id)
@@ -310,17 +422,22 @@ void MonitorController::SaveMonitorSettings(const MonitorInfo& info, const Monit
 {
     try {
         std::filesystem::path filepath = GetSettingsFilePath(info);
-        std::ofstream file(filepath, std::ios::out | std::ios::binary);
+
+        // nlohmann::jsonオブジェクトを作成
+        nlohmann::json j = {
+            {"brightness", settings.brightness},
+            {"contrast", settings.contrast},
+            {"colorTemperature", settings.colorTemperature}
+        };
+
+        // JSONをファイルに書き込み（整形して見やすく）
+        std::ofstream file(filepath);
         if (!file) {
             throw DisplayControllerException("Failed to open settings file for writing: " + filepath.string());
         }
 
-        // JSON形式で設定を保存（整形して見やすく）
-        file << "{\n"
-             << "  \"brightness\": " << settings.brightness << ",\n"
-             << "  \"contrast\": " << settings.contrast << ",\n"
-             << "  \"colorTemperature\": " << settings.colorTemperature << "\n"
-             << "}\n";
+        file << j.dump(2); // インデント2でフォーマット
+        file.flush();
 
         if (!file) {
             throw DisplayControllerException("Failed to write settings to file: " + filepath.string());
@@ -340,49 +457,28 @@ MonitorController::MonitorSettings MonitorController::LoadMonitorSettings(const 
             return settings; // ファイルが存在しない場合はデフォルト設定を返す
         }
 
-        std::ifstream file(filepath, std::ios::in | std::ios::binary);
+        std::ifstream file(filepath);
         if (!file) {
             throw DisplayControllerException("Failed to open settings file for reading: " + filepath.string());
         }
 
-        std::string json;
-        std::string line;
-        while (std::getline(file, line)) {
-            json += line + "\n";
-        }
-
-        if (!file.eof() && file.fail()) {
-            throw DisplayControllerException("Failed to read settings file: " + filepath.string());
-        }
-
-        // JSONパースを改善（エラーチェックを追加）
-        auto parseValue = [](const std::string& json, const std::string& key, size_t startPos) -> std::string {
-            size_t pos = json.find("\"" + key + "\":", startPos);
-            if (pos == std::string::npos) return "";
-
-            pos = json.find_first_not_of(" \t\n\r", pos + key.length() + 2);
-            if (pos == std::string::npos) return "";
-
-            size_t endPos = json.find_first_of(",}\n", pos);
-            if (endPos == std::string::npos) return "";
-
-            return json.substr(pos, endPos - pos);
-        };
-
         try {
-            std::string value;
-            if (!(value = parseValue(json, "brightness", 0)).empty()) {
-                settings.brightness = std::stoi(value);
+            // JSONをパース
+            nlohmann::json j = nlohmann::json::parse(file);
+
+            // 設定を読み込み
+            if (j.contains("brightness")) {
+                settings.brightness = j["brightness"].get<int>();
             }
-            if (!(value = parseValue(json, "contrast", 0)).empty()) {
-                settings.contrast = std::stoi(value);
+            if (j.contains("contrast")) {
+                settings.contrast = j["contrast"].get<int>();
             }
-            if (!(value = parseValue(json, "colorTemperature", 0)).empty()) {
-                settings.colorTemperature = std::stoul(value);
+            if (j.contains("colorTemperature")) {
+                settings.colorTemperature = j["colorTemperature"].get<DWORD>();
             }
         }
-        catch (const std::exception& e) {
-            throw DisplayControllerException(std::string("Failed to parse settings value: ") + e.what());
+        catch (const nlohmann::json::exception& e) {
+            throw DisplayControllerException(std::string("Failed to parse settings JSON: ") + e.what());
         }
     }
     catch (const std::exception& e) {

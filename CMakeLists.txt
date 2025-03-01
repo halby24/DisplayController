@@ -1,4 +1,10 @@
 cmake_minimum_required(VERSION 3.10)
+
+# Set build directory if not already set
+if(NOT CMAKE_BINARY_DIR)
+    set(CMAKE_BINARY_DIR "${CMAKE_SOURCE_DIR}/build")
+endif()
+
 project(DisplayController)
 
 # Set C++ standard
@@ -15,18 +21,48 @@ if(WIN32)
     set(CMAKE_SYSTEM_VERSION "10.0")
 endif()
 
-# Add source files
-set(SOURCES
-    src/main.cpp
+# Add library source files
+set(LIB_SOURCES
     src/MonitorController.cpp
     src/MonitorController.h
 )
 
-# Create executable
-add_executable(DisplayController ${SOURCES})
+# Create library
+add_library(DisplayControllerLib ${LIB_SOURCES})
+target_include_directories(DisplayControllerLib
+    PRIVATE
+        src
+        ThirdPartyLib/nlohmann_json/include
+)
+target_link_libraries(DisplayControllerLib PRIVATE nlohmann_json::nlohmann_json)
 
-# Include directories
-target_include_directories(DisplayController PRIVATE src)
+# Set source file properties for UTF-8
+set_property(SOURCE ${LIB_SOURCES} PROPERTY COMPILE_FLAGS "/utf-8")
+
+# Create main executable
+add_executable(DisplayController src/main.cpp)
+target_link_libraries(DisplayController PRIVATE DisplayControllerLib)
+
+# Create test executable
+add_executable(test_json test_json.cpp)
+target_link_libraries(test_json PRIVATE DisplayControllerLib)
+target_include_directories(test_json PRIVATE ${CMAKE_SOURCE_DIR} ThirdPartyLib/nlohmann_json/include)
+
+# Typically you don't care so much for a third party library's tests to be
+# run from your own project's code.
+set(JSON_BuildTests OFF CACHE INTERNAL "")
+
+# If you only include this third party in PRIVATE source files, you do not
+# need to install it when your main project gets installed.
+# set(JSON_Install OFF CACHE INTERNAL "")
+
+# Don't use include(nlohmann_json/CMakeLists.txt) since that carries with it
+# unintended consequences that will break the build.  It's generally
+# discouraged (although not necessarily well documented as such) to use
+# include(...) for pulling in other CMake projects anyways.
+add_subdirectory(ThirdPartyLib/nlohmann_json)
+
+target_include_directories(DisplayController PRIVATE ThirdPartyLib/nlohmann_json/include)
 
 # Windows specific settings
 if(WIN32 AND MSVC)

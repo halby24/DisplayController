@@ -8,6 +8,7 @@
 #include <filesystem>
 #include <memory>
 #include <map>
+#include <nlohmann/json.hpp>
 
 // 例外クラス
 class DisplayControllerException : public std::runtime_error {
@@ -121,6 +122,9 @@ private:
     static BOOL CALLBACK MonitorEnumProc(HMONITOR hMonitor, HDC hdcMonitor, LPRECT lprcMonitor, LPARAM dwData);
     HANDLE GetPhysicalMonitorHandle(MonitorId id);
     std::wstring GetSettingsFilePath(const MonitorInfo& info) const;
+    std::wstring GetMappingConfigFilePath(MonitorId id) const;
+    void SaveMappingConfig(MonitorId id, const MappingConfig& config);
+    void LoadMappingConfigs();
 
     // 設定ファイルのベースディレクトリ
     std::filesystem::path m_settingsPath;
