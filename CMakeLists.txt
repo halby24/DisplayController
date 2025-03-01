@@ -50,6 +50,7 @@ endif()
 # Find required packages
 find_package(CURL REQUIRED)
 find_package(OpenSSL REQUIRED)
+find_package(nlohmann_json REQUIRED)
 
 # Add library source files
 set(LIB_SOURCES
@@ -75,9 +76,8 @@ add_library(DisplayControllerLib SHARED ${LIB_SOURCES})
 target_include_directories(DisplayControllerLib
     PRIVATE
     src
-    ThirdPartyLib/nlohmann_json/include
 )
-target_link_libraries(DisplayControllerLib PRIVATE nlohmann_json::nlohmann_json)
+target_link_libraries(DisplayControllerLib PUBLIC nlohmann_json::nlohmann_json)
 
 # Define DLL export macro
 target_compile_definitions(DisplayControllerLib
@@ -103,7 +103,6 @@ target_link_libraries(BrightnessDaemon
 target_include_directories(BrightnessDaemon
     PRIVATE
     src
-    ThirdPartyLib/nlohmann_json/include
     SwitchBotLightSensor/include
 )
 
@@ -135,14 +134,6 @@ if(WIN32 AND MSVC)
         "advapi32.lib"
     )
 endif()
-
-# Disable JSON library tests
-set(JSON_BuildTests OFF CACHE INTERNAL "")
-
-# Add nlohmann_json
-add_subdirectory(ThirdPartyLib/nlohmann_json)
-
-target_include_directories(DisplayController PRIVATE ThirdPartyLib/nlohmann_json/include)
 
 # Windows specific settings
 if(WIN32 AND MSVC)
