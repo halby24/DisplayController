@@ -7,5 +7,9 @@
     "cmake.generator": "Visual Studio 17 2022",
     "cmake.preferredGenerators": [
         "Visual Studio 17 2022"
-    ]
+    ],
+    "cmake.outputLogEncoding": "utf8",
+    "cmake.environment": {
+        "VSLANG": "1033"
+    }
 }
