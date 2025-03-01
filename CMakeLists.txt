@@ -1,11 +1,37 @@
 cmake_minimum_required(VERSION 3.15)
 
+# Configure vcpkg
+if(NOT DEFINED CMAKE_TOOLCHAIN_FILE)
+    # First try VCPKG_ROOT environment variable
+    if(DEFINED ENV{VCPKG_ROOT})
+        set(CMAKE_TOOLCHAIN_FILE "$ENV{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake"
+            CACHE STRING "")
+
+    # Then try standard installation locations
+    elseif(EXISTS "C:/dev/vcpkg/scripts/buildsystems/vcpkg.cmake")
+        set(CMAKE_TOOLCHAIN_FILE "C:/dev/vcpkg/scripts/buildsystems/vcpkg.cmake"
+            CACHE STRING "")
+    elseif(EXISTS "C:/vcpkg/scripts/buildsystems/vcpkg.cmake")
+        set(CMAKE_TOOLCHAIN_FILE "C:/vcpkg/scripts/buildsystems/vcpkg.cmake"
+            CACHE STRING "")
+    endif()
+
+    if(DEFINED CMAKE_TOOLCHAIN_FILE)
+        message(STATUS "Using vcpkg toolchain file: ${CMAKE_TOOLCHAIN_FILE}")
+    else()
+        message(FATAL_ERROR "Could not find vcpkg toolchain file. Please set VCPKG_ROOT environment variable or install vcpkg in a standard location.")
+    endif()
+endif()
+
 # Set build directory if not already set
 if(NOT CMAKE_BINARY_DIR)
     set(CMAKE_BINARY_DIR "${CMAKE_SOURCE_DIR}/build")
 endif()
 
 project(DisplayController)
+
+# Configure vcpkg package preferences
+set(CMAKE_PREFIX_PATH "${CMAKE_BINARY_DIR}/vcpkg_installed/${VCPKG_TARGET_TRIPLET}" ${CMAKE_PREFIX_PATH})
 
 # Set C++ standard
 set(CMAKE_CXX_STANDARD 17)
@@ -48,15 +74,15 @@ add_subdirectory(SwitchBotLightSensor)
 add_library(DisplayControllerLib SHARED ${LIB_SOURCES})
 target_include_directories(DisplayControllerLib
     PRIVATE
-        src
-        ThirdPartyLib/nlohmann_json/include
+    src
+    ThirdPartyLib/nlohmann_json/include
 )
 target_link_libraries(DisplayControllerLib PRIVATE nlohmann_json::nlohmann_json)
 
 # Define DLL export macro
 target_compile_definitions(DisplayControllerLib
     PRIVATE
-        DISPLAYCONTROLLERLIB_EXPORTS
+    DISPLAYCONTROLLERLIB_EXPORTS
 )
 
 # Set source file properties for UTF-8
@@ -70,15 +96,15 @@ target_link_libraries(DisplayController PRIVATE DisplayControllerLib)
 add_executable(BrightnessDaemon WIN32 ${DAEMON_SOURCES})
 target_link_libraries(BrightnessDaemon
     PRIVATE
-        DisplayControllerLib
-        nlohmann_json::nlohmann_json
-        SwitchBotLightSensor
+    DisplayControllerLib
+    nlohmann_json::nlohmann_json
+    SwitchBotLightSensor
 )
 target_include_directories(BrightnessDaemon
     PRIVATE
-        src
-        ThirdPartyLib/nlohmann_json/include
-        SwitchBotLightSensor/include
+    src
+    ThirdPartyLib/nlohmann_json/include
+    SwitchBotLightSensor/include
 )
 
 # Add Windows specific settings for BrightnessDaemon
