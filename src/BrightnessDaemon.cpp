@@ -13,6 +13,7 @@
 #define ID_TRAYICON 1
 #define ID_MENU_EXIT 1001
 #define ID_MENU_TOGGLE 1002
+#define ID_MENU_TOGGLE_CONSOLE 1003
 
 // グローバル変数
 HINSTANCE g_hInstance;
@@ -20,15 +21,82 @@ HWND g_hwnd;
 NOTIFYICONDATA g_nid;
 std::unique_ptr<BrightnessManager> g_brightnessManager;
 bool g_isSyncEnabled = false;
+bool g_isConsoleVisible = false;
+WNDPROC g_oldConsoleWndProc = nullptr;  // 元のコンソールウィンドウプロシージャ
 
 // 関数プロトタイプ
 LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
 void InitializeWindow();
 void InitializeTrayIcon();
+void InitializeConsole();
 void ShowContextMenu(HWND hwnd, POINT pt);
 void ToggleSync();
+void ToggleConsoleWindow();
 void Cleanup();
 std::unique_ptr<ILightSensor> CreateLightSensor();
+// コンソールウィンドウプロシージャ
+LRESULT CALLBACK ConsoleWindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
+{
+    switch (uMsg) {
+    case WM_CLOSE:
+        // ×ボタンが押されたときの処理
+        ShowWindow(hwnd, SW_HIDE);
+        g_isConsoleVisible = false;
+        return 0;  // メッセージを処理済みとして返す
+    }
+    // その他のメッセージは元のウィンドウプロシージャに渡す
+    return CallWindowProc(g_oldConsoleWndProc, hwnd, uMsg, wParam, lParam);
+}
+
+// コンソール管理
+// コンソール管理
+void InitializeConsole()
+{
+    // コンソールウィンドウの作成
+    if (!AllocConsole()) {
+        MessageBox(NULL, L"コンソールの作成に失敗しました", L"エラー", MB_OK | MB_ICONERROR);
+        return;
+    }
+
+    // コンソールウィンドウのウィンドウプロシージャを設定
+    HWND consoleWindow = GetConsoleWindow();
+    if (consoleWindow) {
+        g_oldConsoleWndProc = (WNDPROC)SetWindowLongPtr(consoleWindow, GWLP_WNDPROC, (LONG_PTR)ConsoleWindowProc);
+        if (!g_oldConsoleWndProc) {
+            MessageBox(NULL, L"コンソールウィンドウプロシージャの設定に失敗しました", L"エラー", MB_OK | MB_ICONERROR);
+            return;
+        }
+    }
+
+    // 標準出力のリダイレクト
+    FILE* fp;
+    if (freopen_s(&fp, "CONOUT$", "w", stdout) != 0 ||
+        freopen_s(&fp, "CONOUT$", "w", stderr) != 0) {
+        MessageBox(NULL, L"標準出力のリダイレクトに失敗しました", L"エラー", MB_OK | MB_ICONERROR);
+        return;
+    }
+
+    // 初期状態では非表示
+    ShowWindow(GetConsoleWindow(), SW_HIDE);
+    g_isConsoleVisible = false;
+}
+
+void ToggleConsoleWindow()
+{
+    HWND consoleWindow = GetConsoleWindow();
+    if (consoleWindow == NULL) {
+        MessageBox(NULL, L"コンソールウィンドウが見つかりません", L"エラー", MB_OK | MB_ICONERROR);
+        return;
+    }
+
+    if (g_isConsoleVisible) {
+        ShowWindow(consoleWindow, SW_HIDE);
+        g_isConsoleVisible = false;
+    } else {
+        ShowWindow(consoleWindow, SW_SHOW);
+        g_isConsoleVisible = true;
+    }
+}
 
 // センサーの作成
 std::unique_ptr<ILightSensor> CreateLightSensor()
@@ -75,8 +143,14 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
     // タスクトレイアイコンの初期化
     InitializeTrayIcon();
 
+    // コンソールの初期化
+    InitializeConsole();
+
     // BrightnessManagerの初期化
     g_brightnessManager = std::make_unique<BrightnessManager>(CreateLightSensor());
+
+    // 初期化完了のログ出力
+    printf("BrightnessDaemon initialized successfully.\n");
 
     // メッセージループ
     MSG msg = {};
@@ -112,6 +186,10 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 
         case ID_MENU_TOGGLE:
             ToggleSync();
+            return 0;
+
+        case ID_MENU_TOGGLE_CONSOLE:
+            ToggleConsoleWindow();
             return 0;
         }
         break;
@@ -168,6 +246,8 @@ void ShowContextMenu(HWND hwnd, POINT pt)
     if (hMenu) {
         InsertMenu(hMenu, -1, MF_BYPOSITION | MF_STRING, ID_MENU_TOGGLE,
             g_isSyncEnabled ? L"同期を停止" : L"同期を開始");
+        InsertMenu(hMenu, -1, MF_BYPOSITION | MF_STRING, ID_MENU_TOGGLE_CONSOLE,
+            g_isConsoleVisible ? L"コンソールを隠す" : L"コンソールを表示");
         InsertMenu(hMenu, -1, MF_BYPOSITION | MF_STRING, ID_MENU_EXIT, L"終了");
 
         // メニューの表示
@@ -198,5 +278,15 @@ void Cleanup()
     // BrightnessManagerの停止
     if (g_brightnessManager) {
         g_brightnessManager->StopSync();
+    }
+
+    // コンソールのクリーンアップ
+    HWND consoleWindow = GetConsoleWindow();
+    if (consoleWindow != NULL) {
+        // 元のウィンドウプロシージャに戻す
+        if (g_oldConsoleWndProc) {
+            SetWindowLongPtr(consoleWindow, GWLP_WNDPROC, (LONG_PTR)g_oldConsoleWndProc);
+        }
+        FreeConsole();
     }
 }
