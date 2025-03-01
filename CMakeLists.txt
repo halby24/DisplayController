@@ -27,14 +27,30 @@ set(LIB_SOURCES
     src/MonitorController.h
 )
 
-# Create library
-add_library(DisplayControllerLib ${LIB_SOURCES})
+# Add daemon source files
+set(DAEMON_SOURCES
+    src/BrightnessDaemon.cpp
+    src/BrightnessManager.cpp
+    src/BrightnessManager.h
+    src/DummyLightSensor.cpp
+    src/DummyLightSensor.h
+    src/ILightSensor.h
+)
+
+# Create library as DLL
+add_library(DisplayControllerLib SHARED ${LIB_SOURCES})
 target_include_directories(DisplayControllerLib
     PRIVATE
         src
         ThirdPartyLib/nlohmann_json/include
 )
 target_link_libraries(DisplayControllerLib PRIVATE nlohmann_json::nlohmann_json)
+
+# Define DLL export macro
+target_compile_definitions(DisplayControllerLib
+    PRIVATE
+        DISPLAYCONTROLLERLIB_EXPORTS
+)
 
 # Set source file properties for UTF-8
 set_property(SOURCE ${LIB_SOURCES} PROPERTY COMPILE_FLAGS "/utf-8")
@@ -43,10 +59,43 @@ set_property(SOURCE ${LIB_SOURCES} PROPERTY COMPILE_FLAGS "/utf-8")
 add_executable(DisplayController src/main.cpp)
 target_link_libraries(DisplayController PRIVATE DisplayControllerLib)
 
-# Create test executable
-add_executable(test_json test_json.cpp)
-target_link_libraries(test_json PRIVATE DisplayControllerLib)
-target_include_directories(test_json PRIVATE ${CMAKE_SOURCE_DIR} ThirdPartyLib/nlohmann_json/include)
+# Create daemon executable
+add_executable(BrightnessDaemon WIN32 ${DAEMON_SOURCES})
+target_link_libraries(BrightnessDaemon PRIVATE DisplayControllerLib nlohmann_json::nlohmann_json)
+target_include_directories(BrightnessDaemon
+    PRIVATE
+        src
+        ThirdPartyLib/nlohmann_json/include
+)
+
+# Add Windows specific settings for BrightnessDaemon
+if(WIN32 AND MSVC)
+    target_compile_options(BrightnessDaemon PRIVATE
+        /utf-8 # Force UTF-8 encoding
+        /W4 # Warning level 4
+    )
+
+    # Add Windows SDK include paths
+    target_include_directories(BrightnessDaemon PRIVATE
+        "${WIN_SDK_DIR}/Include/${WIN_SDK_VER}/um"
+        "${WIN_SDK_DIR}/Include/${WIN_SDK_VER}/shared"
+        "${WIN_SDK_DIR}/Include/${WIN_SDK_VER}/ucrt"
+        "${VS_INSTALL_DIR}/VC/Tools/MSVC/14.42.33440/include"
+    )
+
+    # Add Windows SDK libraries
+    target_link_libraries(BrightnessDaemon PRIVATE
+        "kernel32.lib"
+        "user32.lib"
+        "gdi32.lib"
+        "shell32.lib"
+        "ole32.lib"
+        "oleaut32.lib"
+        "uuid.lib"
+        "comdlg32.lib"
+        "advapi32.lib"
+    )
+endif()
 
 # Typically you don't care so much for a third party library's tests to be
 # run from your own project's code.

@@ -1,6 +1,13 @@
 #ifndef DISPLAYCONTROLLER_MONITOR_CONTROLLER_H
 #define DISPLAYCONTROLLER_MONITOR_CONTROLLER_H
 
+// DLLエクスポート/インポートマクロ
+#ifdef DISPLAYCONTROLLERLIB_EXPORTS
+    #define DISPLAYCONTROLLER_API __declspec(dllexport)
+#else
+    #define DISPLAYCONTROLLER_API __declspec(dllimport)
+#endif
+
 #include <windows.h>
 #include <vector>
 #include <string>
@@ -11,13 +18,13 @@
 #include <nlohmann/json.hpp>
 
 // 例外クラス
-class DisplayControllerException : public std::runtime_error {
+class DISPLAYCONTROLLER_API DisplayControllerException : public std::runtime_error {
 public:
     explicit DisplayControllerException(const std::string& message)
         : std::runtime_error(message) {}
 };
 
-class WindowsApiException : public DisplayControllerException {
+class DISPLAYCONTROLLER_API WindowsApiException : public DisplayControllerException {
 public:
     explicit WindowsApiException(const std::string& message)
         : DisplayControllerException(message) {}
@@ -62,7 +69,7 @@ public:
 };
 
 // MonitorController クラス
-class MonitorController : public IMonitorManager, public IBrightnessMapper, public IMonitorController {
+class DISPLAYCONTROLLER_API MonitorController : public IMonitorManager, public IBrightnessMapper, public IMonitorController {
 public:
     struct MonitorInfo {
         std::wstring deviceName;
