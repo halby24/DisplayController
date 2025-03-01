@@ -12,6 +12,7 @@ add_definitions(-DSWITCHBOT_EXPORTS)
 set(SOURCES
     src/SwitchBotLightSensor.cpp
     src/HttpClient.cpp
+    ../src/ConfigManager.cpp
 )
 
 # ヘッダーファイル
@@ -19,6 +20,7 @@ set(HEADERS
     include/SwitchBotLightSensor.h
     include/HttpClient.h
     include/SwitchBotException.h
+    ../src/ConfigManager.h
 )
 
 # DLLターゲットの作成
@@ -33,6 +35,7 @@ target_include_directories(${PROJECT_NAME}
         ${CMAKE_CURRENT_SOURCE_DIR}/include
     PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/src
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src
 )
 
 # 依存ライブラリの検索

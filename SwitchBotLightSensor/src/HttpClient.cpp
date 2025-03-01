@@ -6,13 +6,14 @@
 #include <openssl/hmac.h>
 #include <openssl/sha.h>
 
-namespace {
-    // レスポンスデータを格納するコールバック関数
-    size_t WriteCallback(void* contents, size_t size, size_t nmemb, std::string* userp) {
-        userp->append((char*)contents, size * nmemb);
-        return size * nmemb;
-    }
+// レスポンスデータを格納するコールバック関数
+size_t HttpClient::WriteCallback(void* contents, size_t size, size_t nmemb, void* userp) {
+    auto* response = static_cast<std::string*>(userp);
+    response->append(static_cast<char*>(contents), size * nmemb);
+    return size * nmemb;
+}
 
+namespace {
     // Base64エンコード
     std::string Base64Encode(const unsigned char* input, size_t length) {
         static const std::string base64_chars =

@@ -188,3 +188,11 @@ endif()
 target_link_libraries(DisplayController PRIVATE
     wbemuuid # WMI support
 )
+
+# Copy SwitchBotLightSensor.dll to BrightnessDaemon output directory
+add_custom_command(TARGET BrightnessDaemon POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        $<TARGET_FILE:SwitchBotLightSensor>
+        $<TARGET_FILE_DIR:BrightnessDaemon>
+    COMMENT "Copying SwitchBotLightSensor.dll to BrightnessDaemon directory"
+)
