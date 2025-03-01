@@ -5,6 +5,7 @@
 #include <random>
 #include <openssl/hmac.h>
 #include <openssl/sha.h>
+#include <iostream>
 
 // レスポンスデータを格納するコールバック関数
 size_t HttpClient::WriteCallback(void* contents, size_t size, size_t nmemb, void* userp) {
@@ -107,8 +108,11 @@ void HttpClient::SetupHeaders(void* request, const std::string& signature, const
 
 nlohmann::json HttpClient::Get(const std::string& endpoint) {
     if (!m_curl) {
+        std::cerr << "[SwitchBot] Error: CURL not initialized" << std::endl;
         throw HttpException("CURL not initialized");
     }
+
+    std::cout << "[SwitchBot] Making API request to: " << endpoint << std::endl;
 
     // ランダムなnonceを生成
     std::random_device rd;
@@ -124,6 +128,11 @@ nlohmann::json HttpClient::Get(const std::string& endpoint) {
          (unsigned char*)signStr.c_str(), signStr.length(), hash, nullptr);
     std::string signature = Base64Encode(hash, SHA256_DIGEST_LENGTH);
 
+    std::cout << "[SwitchBot] Request details:" << std::endl;
+    std::cout << "  - Timestamp: " << timestamp << std::endl;
+    std::cout << "  - Nonce: " << nonce << std::endl;
+    std::cout << "  - Token: " << m_token.substr(0, 5) << "..." << m_token.substr(m_token.length() - 5) << std::endl;
+
     std::string response_string;
     curl_easy_setopt(m_curl, CURLOPT_URL, endpoint.c_str());
     curl_easy_setopt(m_curl, CURLOPT_WRITEFUNCTION, WriteCallback);
@@ -133,20 +142,30 @@ nlohmann::json HttpClient::Get(const std::string& endpoint) {
 
     SetupHeaders(m_curl, signature, nonce);
 
+    std::cout << "[SwitchBot] Sending request..." << std::endl;
     CURLcode res = curl_easy_perform(m_curl);
     if (res != CURLE_OK) {
-        throw HttpException(std::string("CURL request failed: ") + curl_easy_strerror(res));
+        std::string error = curl_easy_strerror(res);
+        std::cerr << "[SwitchBot] CURL request failed: " << error << std::endl;
+        throw HttpException(std::string("CURL request failed: ") + error);
     }
 
     long http_code = 0;
     curl_easy_getinfo(m_curl, CURLINFO_RESPONSE_CODE, &http_code);
+    std::cout << "[SwitchBot] HTTP response code: " << http_code << std::endl;
+
     if (http_code != 200) {
+        std::cerr << "[SwitchBot] HTTP request failed with code: " << http_code << std::endl;
         throw HttpException("HTTP request failed with code: " + std::to_string(http_code));
     }
 
     try {
-        return nlohmann::json::parse(response_string);
+        auto json_response = nlohmann::json::parse(response_string);
+        std::cout << "[SwitchBot] Response parsed successfully" << std::endl;
+        return json_response;
     } catch (const nlohmann::json::parse_error& e) {
+        std::cerr << "[SwitchBot] Failed to parse JSON response: " << e.what() << std::endl;
+        std::cerr << "[SwitchBot] Raw response: " << response_string << std::endl;
         throw HttpException(std::string("Failed to parse JSON response: ") + e.what());
     }
 }
