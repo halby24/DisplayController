@@ -1,0 +1,12 @@
+{
+  "switchbot": {
+    "token": "YOUR_SWITCHBOT_API_TOKEN",
+    "devices": [
+      {
+        "id": "YOUR_DEVICE_ID",
+        "name": "Light Sensor 1",
+        "type": "lightSensor"
+      }
+    ]
+  }
+}

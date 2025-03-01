@@ -4,6 +4,7 @@
 #include <memory>
 #include <string>
 #include "../../src/ILightSensor.h"
+#include "../../src/ConfigManager.h"
 #include <nlohmann/json.hpp>
 
 #ifdef SWITCHBOT_EXPORTS
@@ -13,15 +14,14 @@
 #endif
 
 class HttpClient;
-
 class SWITCHBOT_API SwitchBotLightSensor : public ILightSensor {
 private:
-    std::string m_token;
-    std::string m_deviceId;
+    std::string m_deviceName;
     std::unique_ptr<HttpClient> m_httpClient;
+    ConfigManager& m_config;
 
 public:
-    SwitchBotLightSensor(const std::string& token, const std::string& deviceId);
+    explicit SwitchBotLightSensor(const std::string& deviceName);
     virtual ~SwitchBotLightSensor() override;
 
     virtual int GetLightLevel() override;
@@ -29,7 +29,6 @@ public:
 private:
     nlohmann::json GetDeviceStatus();
     int NormalizeLightLevel(int rawLevel);
-    std::string GenerateSignature();
     std::string GenerateNonce();
 };
 

@@ -4,9 +4,9 @@
 #include "BrightnessManager.h"
 #include "DummyLightSensor.h"
 #include "SwitchBotLightSensor.h"
+#include "ConfigManager.h"
 #include <memory>
 #include <string>
-#include <nlohmann/json.hpp>
 
 // タスクトレイアイコンの定数
 #define WM_APP_NOTIFY (WM_APP + 1)
@@ -30,43 +30,26 @@ void ToggleSync();
 void Cleanup();
 std::unique_ptr<ILightSensor> CreateLightSensor();
 
-// 設定ファイルから認証情報を読み込む
-std::pair<std::string, std::string> LoadSwitchBotConfig()
-{
-    try {
-        std::ifstream file("switchbot_config.json");
-        if (!file.is_open()) {
-            MessageBox(NULL, L"設定ファイルが見つかりません", L"警告", MB_OK | MB_ICONWARNING);
-            return {"", ""};
-        }
-
-        nlohmann::json config = nlohmann::json::parse(file);
-        return {
-            config.value("token", ""),
-            config.value("deviceId", "")
-        };
-    }
-    catch (const std::exception& e) {
-        std::string error = "設定ファイルの読み込みに失敗しました: ";
-        error += e.what();
-        MessageBoxA(NULL, error.c_str(), "エラー", MB_OK | MB_ICONERROR);
-        return {"", ""};
-    }
-}
-
 // センサーの作成
 std::unique_ptr<ILightSensor> CreateLightSensor()
 {
-    auto [token, deviceId] = LoadSwitchBotConfig();
-    if (!token.empty() && !deviceId.empty()) {
-        try {
-            return std::make_unique<SwitchBotLightSensor>(token, deviceId);
-        }
-        catch (const std::exception& e) {
-            std::string error = "SwitchBotの初期化に失敗しました: ";
-            error += e.what();
-            MessageBoxA(NULL, error.c_str(), "エラー", MB_OK | MB_ICONWARNING);
-        }
+    try {
+        auto& config = ConfigManager::Instance();
+        config.Load();
+
+        // デバイス名は設定ファイルから取得するか、ハードコードする
+        // TODO: デバイス名を設定UIから設定できるようにする
+        return std::make_unique<SwitchBotLightSensor>("Light Sensor 1");
+    }
+    catch (const ConfigException& e) {
+        std::string error = "設定の読み込みに失敗しました: ";
+        error += e.what();
+        MessageBoxA(NULL, error.c_str(), "エラー", MB_OK | MB_ICONWARNING);
+    }
+    catch (const std::exception& e) {
+        std::string error = "SwitchBotの初期化に失敗しました: ";
+        error += e.what();
+        MessageBoxA(NULL, error.c_str(), "エラー", MB_OK | MB_ICONWARNING);
     }
 
     // 設定が無効な場合やエラーが発生した場合はダミーセンサーを使用

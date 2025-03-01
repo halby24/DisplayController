@@ -9,16 +9,29 @@ namespace {
     constexpr int MAX_RAW_BRIGHTNESS = 1000; // SwitchBotの生の照度値の最大値
 }
 
-SwitchBotLightSensor::SwitchBotLightSensor(const std::string& token, const std::string& deviceId)
-    : m_token(token)
-    , m_deviceId(deviceId)
-    , m_httpClient(std::make_unique<HttpClient>(token))
+SwitchBotLightSensor::SwitchBotLightSensor(const std::string& deviceName)
+    : m_deviceName(deviceName)
+    , m_config(ConfigManager::Instance())
 {
-    if (token.empty()) {
-        throw ConfigurationException("API token cannot be empty");
+    if (deviceName.empty()) {
+        throw ConfigurationException("Device name cannot be empty");
     }
-    if (deviceId.empty()) {
-        throw ConfigurationException("Device ID cannot be empty");
+
+    try {
+        // 設定を読み込み
+        m_config.Load();
+
+        // APIトークンを取得して初期化
+        std::string token = m_config.GetSwitchBotToken();
+        if (token.empty()) {
+            throw ConfigurationException("SwitchBot API token not configured");
+        }
+
+        // HTTPクライアントを初期化
+        m_httpClient = std::make_unique<HttpClient>(token);
+    }
+    catch (const ConfigException& e) {
+        throw ConfigurationException(std::string("Failed to load configuration: ") + e.what());
     }
 }
 
@@ -47,32 +60,40 @@ int SwitchBotLightSensor::GetLightLevel()
 
 nlohmann::json SwitchBotLightSensor::GetDeviceStatus()
 {
-    std::stringstream url;
-    url << API_BASE_URL << m_deviceId << "/status";
+    try {
+        // デバイスIDを取得
+        std::string deviceId = m_config.GetDeviceId(m_deviceName);
 
-    auto response = m_httpClient->Get(url.str());
+        std::stringstream url;
+        url << API_BASE_URL << deviceId << "/status";
 
-    // レスポンスのステータスコードを確認
-    if (!response.contains("statusCode")) {
-        throw SwitchBotException("Invalid API response format");
-    }
+        auto response = m_httpClient->Get(url.str());
 
-    int statusCode = response["statusCode"].get<int>();
-    if (statusCode != 100) {
-        switch (statusCode) {
-            case 401:
-                throw AuthenticationException("Authentication failed");
-            case 404:
-                throw DeviceNotFoundException("Device not found: " + m_deviceId);
-            default:
-                throw SwitchBotException(
-                    "API request failed with status code: " + std::to_string(statusCode),
-                    statusCode
-                );
+        // レスポンスのステータスコードを確認
+        if (!response.contains("statusCode")) {
+            throw SwitchBotException("Invalid API response format");
         }
-    }
 
-    return response;
+        int statusCode = response["statusCode"].get<int>();
+        if (statusCode != 100) {
+            switch (statusCode) {
+                case 401:
+                    throw AuthenticationException("Authentication failed");
+                case 404:
+                    throw DeviceNotFoundException("Device not found: " + deviceId);
+                default:
+                    throw SwitchBotException(
+                        "API request failed with status code: " + std::to_string(statusCode),
+                        statusCode
+                    );
+            }
+        }
+
+        return response;
+    }
+    catch (const ConfigException& e) {
+        throw SwitchBotException(std::string("Failed to get device configuration: ") + e.what());
+    }
 }
 
 int SwitchBotLightSensor::NormalizeLightLevel(int rawLevel)
