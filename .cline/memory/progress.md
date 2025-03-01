@@ -15,10 +15,10 @@
 - [x] ILightSensor抽象化
 
 ### 3. SwitchBot統合
-- [x] SwitchBotLightSensor DLL設計
+- [x] SwitchBotLightSensor DLL実装
 - [x] HttpClient実装
-- [x] SwitchBotLightSensor実装
 - [x] 単体テスト実装
+- [x] 設定システム実装
 
 ### 4. BrightnessDaemon
 - [x] デーモン基本設計
@@ -28,8 +28,8 @@
 
 ### 5. ドキュメント
 - [x] 基本設計ドキュメント
-- [x] SwitchBot統合ドキュメント
-- [x] デーモン設計ドキュメント
+- [x] SwitchBot統合仕様
+- [x] デーモン設計仕様
 - [x] 設定ファイル仕様
 
 ## 進行中の作業
@@ -85,12 +85,6 @@
 - エラーメッセージの改善
 - ドキュメントの更新必要
 - インストール手順の簡略化
-
-### 3. テスト課題
-- 結合テストの不足
-- エラーケースの網羅不足
-- パフォーマンステストの必要性
-- 長期安定性テストの実施
 
 ## 今後の計画
 
