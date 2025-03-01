@@ -22,7 +22,8 @@ NOTIFYICONDATA g_nid;
 std::unique_ptr<BrightnessManager> g_brightnessManager;
 bool g_isSyncEnabled = false;
 bool g_isConsoleVisible = false;
-WNDPROC g_oldConsoleWndProc = nullptr;  // 元のコンソールウィンドウプロシージャ
+HHOOK g_consoleHook = nullptr;  // コンソールウィンドウのフック
+HWND g_consoleWindow = nullptr; // コンソールウィンドウのハンドル
 
 // 関数プロトタイプ
 LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
@@ -34,44 +35,22 @@ void ToggleSync();
 void ToggleConsoleWindow();
 void Cleanup();
 std::unique_ptr<ILightSensor> CreateLightSensor();
-// コンソールウィンドウプロシージャ
-LRESULT CALLBACK ConsoleWindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
-{
-    switch (uMsg) {
-    case WM_CLOSE:
-        // ×ボタンが押されたときの処理
-        ShowWindow(hwnd, SW_HIDE);
-        g_isConsoleVisible = false;
-        return 0;  // メッセージを処理済みとして返す
-    }
-    // その他のメッセージは元のウィンドウプロシージャに渡す
-    return CallWindowProc(g_oldConsoleWndProc, hwnd, uMsg, wParam, lParam);
-}
 
-// コンソール管理
 // コンソール管理
 void InitializeConsole()
 {
     // コンソールウィンドウの作成
-    if (!AllocConsole()) {
+    if (!AllocConsole())
+    {
         MessageBox(NULL, L"コンソールの作成に失敗しました", L"エラー", MB_OK | MB_ICONERROR);
         return;
     }
 
-    // コンソールウィンドウのウィンドウプロシージャを設定
-    HWND consoleWindow = GetConsoleWindow();
-    if (consoleWindow) {
-        g_oldConsoleWndProc = (WNDPROC)SetWindowLongPtr(consoleWindow, GWLP_WNDPROC, (LONG_PTR)ConsoleWindowProc);
-        if (!g_oldConsoleWndProc) {
-            MessageBox(NULL, L"コンソールウィンドウプロシージャの設定に失敗しました", L"エラー", MB_OK | MB_ICONERROR);
-            return;
-        }
-    }
-
     // 標準出力のリダイレクト
-    FILE* fp;
+    FILE *fp;
     if (freopen_s(&fp, "CONOUT$", "w", stdout) != 0 ||
-        freopen_s(&fp, "CONOUT$", "w", stderr) != 0) {
+        freopen_s(&fp, "CONOUT$", "w", stderr) != 0)
+    {
         MessageBox(NULL, L"標準出力のリダイレクトに失敗しました", L"エラー", MB_OK | MB_ICONERROR);
         return;
     }
@@ -84,15 +63,19 @@ void InitializeConsole()
 void ToggleConsoleWindow()
 {
     HWND consoleWindow = GetConsoleWindow();
-    if (consoleWindow == NULL) {
+    if (consoleWindow == NULL)
+    {
         MessageBox(NULL, L"コンソールウィンドウが見つかりません", L"エラー", MB_OK | MB_ICONERROR);
         return;
     }
 
-    if (g_isConsoleVisible) {
+    if (g_isConsoleVisible)
+    {
         ShowWindow(consoleWindow, SW_HIDE);
         g_isConsoleVisible = false;
-    } else {
+    }
+    else
+    {
         ShowWindow(consoleWindow, SW_SHOW);
         g_isConsoleVisible = true;
     }
@@ -101,20 +84,23 @@ void ToggleConsoleWindow()
 // センサーの作成
 std::unique_ptr<ILightSensor> CreateLightSensor()
 {
-    try {
-        auto& config = ConfigManager::Instance();
+    try
+    {
+        auto &config = ConfigManager::Instance();
         config.Load();
 
         // デバイス名は設定ファイルから取得するか、ハードコードする
         // TODO: デバイス名を設定UIから設定できるようにする
         return std::make_unique<SwitchBotLightSensor>("Light Sensor 1");
     }
-    catch (const ConfigException& e) {
+    catch (const ConfigException &e)
+    {
         std::string error = "設定の読み込みに失敗しました: ";
         error += e.what();
         MessageBoxA(NULL, error.c_str(), "エラー", MB_OK | MB_ICONWARNING);
     }
-    catch (const std::exception& e) {
+    catch (const std::exception &e)
+    {
         std::string error = "SwitchBotの初期化に失敗しました: ";
         error += e.what();
         MessageBoxA(NULL, error.c_str(), "エラー", MB_OK | MB_ICONWARNING);
@@ -154,7 +140,8 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 
     // メッセージループ
     MSG msg = {};
-    while (GetMessage(&msg, NULL, 0, 0)) {
+    while (GetMessage(&msg, NULL, 0, 0))
+    {
         TranslateMessage(&msg);
         DispatchMessage(&msg);
     }
@@ -165,9 +152,11 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 
 LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 {
-    switch (uMsg) {
+    switch (uMsg)
+    {
     case WM_APP_NOTIFY:
-        switch (LOWORD(lParam)) {
+        switch (LOWORD(lParam))
+        {
         case WM_RBUTTONUP:
         {
             POINT pt;
@@ -179,7 +168,8 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
         break;
 
     case WM_COMMAND:
-        switch (LOWORD(wParam)) {
+        switch (LOWORD(wParam))
+        {
         case ID_MENU_EXIT:
             DestroyWindow(hwnd);
             return 0;
@@ -214,10 +204,10 @@ void InitializeWindow()
         NULL,
         NULL,
         g_hInstance,
-        NULL
-    );
+        NULL);
 
-    if (g_hwnd == NULL) {
+    if (g_hwnd == NULL)
+    {
         MessageBox(NULL, L"ウィンドウの作成に失敗しました", L"エラー", MB_OK | MB_ICONERROR);
         exit(1);
     }
@@ -231,10 +221,11 @@ void InitializeTrayIcon()
     g_nid.uID = ID_TRAYICON;
     g_nid.uFlags = NIF_ICON | NIF_MESSAGE | NIF_TIP;
     g_nid.uCallbackMessage = WM_APP_NOTIFY;
-    g_nid.hIcon = LoadIcon(NULL, IDI_APPLICATION);  // デフォルトアイコンを使用
+    g_nid.hIcon = LoadIcon(NULL, IDI_APPLICATION); // デフォルトアイコンを使用
     wcscpy_s(g_nid.szTip, L"BrightnessDaemon");
 
-    if (!Shell_NotifyIcon(NIM_ADD, &g_nid)) {
+    if (!Shell_NotifyIcon(NIM_ADD, &g_nid))
+    {
         MessageBox(NULL, L"タスクトレイアイコンの作成に失敗しました", L"エラー", MB_OK | MB_ICONERROR);
         exit(1);
     }
@@ -243,28 +234,31 @@ void InitializeTrayIcon()
 void ShowContextMenu(HWND hwnd, POINT pt)
 {
     HMENU hMenu = CreatePopupMenu();
-    if (hMenu) {
+    if (hMenu)
+    {
         InsertMenu(hMenu, -1, MF_BYPOSITION | MF_STRING, ID_MENU_TOGGLE,
-            g_isSyncEnabled ? L"同期を停止" : L"同期を開始");
+                   g_isSyncEnabled ? L"同期を停止" : L"同期を開始");
         InsertMenu(hMenu, -1, MF_BYPOSITION | MF_STRING, ID_MENU_TOGGLE_CONSOLE,
-            g_isConsoleVisible ? L"コンソールを隠す" : L"コンソールを表示");
+                   g_isConsoleVisible ? L"コンソールを隠す" : L"コンソールを表示");
         InsertMenu(hMenu, -1, MF_BYPOSITION | MF_STRING, ID_MENU_EXIT, L"終了");
 
         // メニューの表示
         SetForegroundWindow(hwnd);
         TrackPopupMenu(hMenu, TPM_BOTTOMALIGN | TPM_LEFTALIGN,
-            pt.x, pt.y, 0, hwnd, NULL);
+                       pt.x, pt.y, 0, hwnd, NULL);
         DestroyMenu(hMenu);
     }
 }
 
 void ToggleSync()
 {
-    if (g_isSyncEnabled) {
+    if (g_isSyncEnabled)
+    {
         g_brightnessManager->StopSync();
         g_isSyncEnabled = false;
     }
-    else {
+    else
+    {
         g_brightnessManager->StartSync();
         g_isSyncEnabled = true;
     }
@@ -276,17 +270,20 @@ void Cleanup()
     Shell_NotifyIcon(NIM_DELETE, &g_nid);
 
     // BrightnessManagerの停止
-    if (g_brightnessManager) {
+    if (g_brightnessManager)
+    {
         g_brightnessManager->StopSync();
     }
 
     // コンソールのクリーンアップ
-    HWND consoleWindow = GetConsoleWindow();
-    if (consoleWindow != NULL) {
-        // 元のウィンドウプロシージャに戻す
-        if (g_oldConsoleWndProc) {
-            SetWindowLongPtr(consoleWindow, GWLP_WNDPROC, (LONG_PTR)g_oldConsoleWndProc);
-        }
+    if (g_consoleHook)
+    {
+        UnhookWindowsHookEx(g_consoleHook);
+        g_consoleHook = nullptr;
+    }
+    if (g_consoleWindow)
+    {
         FreeConsole();
+        g_consoleWindow = nullptr;
     }
 }
