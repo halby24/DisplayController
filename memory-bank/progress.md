@@ -23,25 +23,22 @@
    - パス操作をstd::filesystem::pathを使用するように改善
    - エンコーディング関連の問題を解決
    - u8プレフィックスを削除して文字列リテラルを修正
+   - 文字列リテラルの構文エラーを解決
+   - 文字列連結の問題を解決
 
 ## 残作業
 
-1. ConfigManager.cppの文字列リテラルエラーの修正
-   - 文字列リテラルの構文エラーの解決
-   - 文字列連結の問題解決
-
-2. SwitchBotLightSensorのビルドエラー修正
+1. SwitchBotLightSensorのビルドエラー修正
    - インクルードパスの問題解決
    - 依存関係の解決
 
-3. テストのリンクエラー修正
+2. テストのリンクエラー修正
    - PluginLoader.libの参照問題の解決
 
 ## 次のステップ
 
-1. ConfigManager.cppの文字列リテラルエラーの修正
-2. SwitchBotLightSensorのビルドエラー修正
-3. テストのリンクエラー修正
+1. SwitchBotLightSensorのビルドエラー修正
+2. テストのリンクエラー修正
 
 ## 注意点
 
