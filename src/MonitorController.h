@@ -2,11 +2,14 @@
 #define DISPLAYCONTROLLER_MONITOR_CONTROLLER_H
 
 // DLLエクスポート/インポートマクロ
-#ifdef DISPLAYCONTROLLERLIB_EXPORTS
+#ifdef DISPLAYCONTROLLER_EXPORTS
     #define DISPLAYCONTROLLER_API __declspec(dllexport)
 #else
     #define DISPLAYCONTROLLER_API __declspec(dllimport)
 #endif
+
+// インターフェースのDLLエクスポート設定
+#define DISPLAYCONTROLLER_INTERFACE class DISPLAYCONTROLLER_API
 
 #include <windows.h>
 #include <vector>
@@ -43,7 +46,7 @@ struct MappingConfig {
 };
 
 // モニター管理インターフェース
-class IMonitorManager {
+DISPLAYCONTROLLER_INTERFACE IMonitorManager {
 public:
     virtual ~IMonitorManager() = default;
     virtual std::vector<MonitorId> EnumerateMonitors() = 0;
@@ -51,7 +54,7 @@ public:
 };
 
 // 輝度マッピングインターフェース
-class IBrightnessMapper {
+DISPLAYCONTROLLER_INTERFACE IBrightnessMapper {
 public:
     virtual ~IBrightnessMapper() = default;
     virtual int MapBrightness(MonitorId id, int normalizedBrightness) = 0;
@@ -60,7 +63,7 @@ public:
 };
 
 // モニター制御インターフェース
-class IMonitorController {
+DISPLAYCONTROLLER_INTERFACE IMonitorController {
 public:
     virtual ~IMonitorController() = default;
     virtual bool SetBrightness(MonitorId id, int brightness) = 0;

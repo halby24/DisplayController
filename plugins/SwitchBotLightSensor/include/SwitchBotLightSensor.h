@@ -3,8 +3,8 @@
 
 #include <memory>
 #include <string>
-#include "../../src/ILightSensor.h"
-#include "../../src/ConfigManager.h"
+#include <ILightSensor.h>
+#include <ConfigManager.h>
 #include <nlohmann/json.hpp>
 
 #ifdef SWITCHBOT_EXPORTS
@@ -16,13 +16,21 @@
 class HttpClient;
 class SWITCHBOT_API SwitchBotLightSensor : public ILightSensor {
 private:
-    std::string m_deviceName;
+    std::string m_token;
+    std::string m_deviceId;
+    int m_retryCount;
+    int m_retryInterval;
     std::unique_ptr<HttpClient> m_httpClient;
     ConfigManager& m_config;
     CalibrationSettings m_calibration;
 
 public:
-    explicit SwitchBotLightSensor(const std::string& deviceName);
+    SwitchBotLightSensor(
+        const std::string& token,
+        const std::string& deviceId,
+        int retryCount = 3,
+        int retryInterval = 1000
+    );
     virtual ~SwitchBotLightSensor() override;
 
     virtual int GetLightLevel() override;

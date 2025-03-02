@@ -1,5 +1,5 @@
 #include "ConfigManager.h"
-#include "StringUtils.h"
+#include <common/StringUtils.h>
 #include <fstream>
 #include <filesystem>
 #include <shlobj.h>
@@ -47,9 +47,18 @@ void ConfigManager::EnsureConfigDirectoryExists() const
 
 void ConfigManager::CreateDefaultConfig()
 {
-    m_config = {
-        {"switchbot", {{"token", "}, {"secret", "}, {"devices", nlohmann::json::array()}}},
-        {"brightness_daemon", {{"update_interval_ms", 5000}, {"min_brightness", 0}, {"max_brightness", 100}}}};
+    m_config = nlohmann::json{
+        {"switchbot", {
+            {"token", std::string("")},
+            {"secret", std::string("")},
+            {"devices", nlohmann::json::array()}
+        }},
+        {"brightness_daemon", {
+            {"update_interval_ms", 5000},
+            {"min_brightness", 0},
+            {"max_brightness", 100}
+        }}
+    };
     Save();
 }
 

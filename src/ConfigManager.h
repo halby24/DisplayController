@@ -4,7 +4,7 @@
 #include <string>
 #include <memory>
 #include <nlohmann/json.hpp>
-#include "StringUtils.h"
+#include <common/StringUtils.h>
 
 // キャリブレーション設定を管理する構造体
 struct CalibrationSettings {

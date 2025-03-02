@@ -19,7 +19,14 @@ target_compile_definitions(SwitchBotLightSensor PRIVATE
 target_include_directories(SwitchBotLightSensor PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/include
     ${CMAKE_SOURCE_DIR}/src
-    ${CMAKE_SOURCE_DIR}
+    ${CMAKE_SOURCE_DIR}/src/common
+)
+
+# DLLエクスポートマクロを定義
+target_compile_definitions(SwitchBotLightSensor PRIVATE
+    SWITCHBOT_EXPORTS
+    _UNICODE
+    UNICODE
 )
 
 # 依存ライブラリの設定
@@ -33,6 +40,7 @@ target_link_libraries(SwitchBotLightSensor PRIVATE
     nlohmann_json::nlohmann_json
     OpenSSL::SSL
     OpenSSL::Crypto
+    DisplayControllerCommon
 )
 
 # C++20を使用

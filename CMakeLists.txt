@@ -23,27 +23,41 @@ find_package(nlohmann_json CONFIG REQUIRED)
 find_package(GTest CONFIG REQUIRED)
 find_package(OpenSSL REQUIRED)
 
+# 共通ライブラリの追加
+add_subdirectory(src/common)
+
 # メインプロジェクトのソース
-add_library(DisplayController
+add_library(DisplayController SHARED
     src/BrightnessDaemon.cpp
     src/BrightnessManager.cpp
     src/ConfigManager.cpp
     src/MonitorController.cpp
-    src/StringUtils.cpp
     src/PluginLoader.cpp
+)
+
+# DLLエクスポートマクロを定義
+target_compile_definitions(DisplayController PRIVATE
+    DISPLAYCONTROLLER_EXPORTS
+    _UNICODE
+    UNICODE
 )
 
 # インクルードディレクトリの設定
 target_include_directories(DisplayController PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/src
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/common
+    ${CMAKE_CURRENT_SOURCE_DIR}
 )
 
 # リンク設定
-target_link_libraries(DisplayController PRIVATE
-    CURL::libcurl
-    nlohmann_json::nlohmann_json
-    OpenSSL::SSL
-    OpenSSL::Crypto
+target_link_libraries(DisplayController
+    PRIVATE
+        CURL::libcurl
+        OpenSSL::SSL
+        OpenSSL::Crypto
+        DisplayControllerCommon
+    PUBLIC
+        nlohmann_json::nlohmann_json
 )
 
 # プラグインディレクトリの追加

@@ -4,10 +4,13 @@
 #include "BrightnessManager.h"
 #include "PluginLoader.h"
 #include "ConfigManager.h"
-#include "StringUtils.h"
+#include <common/StringUtils.h>
 #include <memory>
 #include <string>
 #include <filesystem>
+#include <nlohmann/json.hpp>
+
+using json = nlohmann::json;
 
 // タスクトレイアイコンの定数
 #define WM_APP_NOTIFY (WM_APP + 1)
