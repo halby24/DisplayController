@@ -3,9 +3,9 @@ project(SwitchBotLightSensor VERSION 1.0.0)
 
 # プラグインのビルド設定
 add_library(SwitchBotLightSensor SHARED
-    src/SwitchBotLightSensor.cpp
-    src/SwitchBotPlugin.cpp
-    src/HttpClient.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/SwitchBotPlugin.cpp
+    ${CMAKE_SOURCE_DIR}/SwitchBotLightSensor/src/SwitchBotLightSensor.cpp
+    ${CMAKE_SOURCE_DIR}/SwitchBotLightSensor/src/HttpClient.cpp
 )
 
 # プラグインのエクスポートマクロを定義
@@ -17,16 +17,20 @@ target_compile_definitions(SwitchBotLightSensor PRIVATE
 target_include_directories(SwitchBotLightSensor PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/include
     ${CMAKE_SOURCE_DIR}/src
+    ${CMAKE_SOURCE_DIR}/SwitchBotLightSensor/include
 )
 
 # 依存ライブラリの設定
 find_package(CURL CONFIG REQUIRED)
 find_package(nlohmann_json CONFIG REQUIRED)
+find_package(OpenSSL REQUIRED)
 
 # リンク設定
 target_link_libraries(SwitchBotLightSensor PRIVATE
     CURL::libcurl
     nlohmann_json::nlohmann_json
+    OpenSSL::SSL
+    OpenSSL::Crypto
 )
 
 # C++17を使用

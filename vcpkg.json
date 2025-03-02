@@ -13,7 +13,11 @@
         {
             "name": "gtest",
             "version>=": "1.14.0"
+        },
+        {
+            "name": "openssl",
+            "version>=": "3.2.1"
         }
     ],
-    "builtin-baseline": "2024-02-01"
+    "builtin-baseline": "efb1e7436979a30c4d3e5ab2375fd8e2e461d541"
 }

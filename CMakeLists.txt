@@ -1,3 +1,9 @@
+# vcpkgのtoolchainを設定
+if(DEFINED ENV{VCPKG_ROOT} AND NOT DEFINED CMAKE_TOOLCHAIN_FILE)
+    set(CMAKE_TOOLCHAIN_FILE "$ENV{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake"
+        CACHE STRING "Vcpkg toolchain file")
+endif()
+
 cmake_minimum_required(VERSION 3.15)
 project(DisplayController VERSION 1.0.0)
 
@@ -9,6 +15,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 find_package(CURL CONFIG REQUIRED)
 find_package(nlohmann_json CONFIG REQUIRED)
 find_package(GTest CONFIG REQUIRED)
+find_package(OpenSSL REQUIRED)
 
 # メインプロジェクトのソース
 add_library(DisplayController
@@ -29,6 +36,8 @@ target_include_directories(DisplayController PUBLIC
 target_link_libraries(DisplayController PRIVATE
     CURL::libcurl
     nlohmann_json::nlohmann_json
+    OpenSSL::SSL
+    OpenSSL::Crypto
 )
 
 # プラグインディレクトリの追加

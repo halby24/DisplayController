@@ -2,7 +2,7 @@
 #include <windows.h>
 #include <filesystem>
 #include <stdexcept>
-#include <format>
+#include <sstream>
 
 namespace fs = std::filesystem;
 
@@ -28,18 +28,18 @@ size_t PluginLoader::LoadPlugins(const std::string& pluginDir) {
                 }
                 catch (const std::exception& e) {
                     // 個別のプラグインのロード失敗は記録するが、続行する
-                    OutputDebugStringA(std::format(
-                        "Failed to load plugin {}: {}\n",
-                        entry.path().string(), e.what()
-                    ).c_str());
+                    std::ostringstream oss;
+                    oss << "Failed to load plugin " << entry.path().string()
+                        << ": " << e.what() << "\n";
+                    OutputDebugStringA(oss.str().c_str());
                 }
             }
         }
     }
     catch (const fs::filesystem_error& e) {
-        throw std::runtime_error(std::format(
-            "Failed to access plugin directory: {}", e.what()
-        ));
+        std::ostringstream oss;
+        oss << "Failed to access plugin directory: " << e.what();
+        throw std::runtime_error(oss.str());
     }
 
     return loadedCount;
@@ -49,9 +49,9 @@ void PluginLoader::LoadPlugin(const std::string& pluginPath) {
     // DLLをロード
     HMODULE handle = LoadLibraryA(pluginPath.c_str());
     if (!handle) {
-        throw std::runtime_error(std::format(
-            "Failed to load plugin DLL: {}", pluginPath
-        ));
+        std::ostringstream oss;
+        oss << "Failed to load plugin DLL: " << pluginPath;
+        throw std::runtime_error(oss.str());
     }
 
     // 関数ポインタを取得
@@ -61,18 +61,18 @@ void PluginLoader::LoadPlugin(const std::string& pluginPath) {
 
     if (!createPlugin) {
         FreeLibrary(handle);
-        throw std::runtime_error(std::format(
-            "Invalid plugin DLL (CreatePlugin not found): {}", pluginPath
-        ));
+        std::ostringstream oss;
+        oss << "Invalid plugin DLL (CreatePlugin not found): " << pluginPath;
+        throw std::runtime_error(oss.str());
     }
 
     // プラグインインスタンスを作成
     ILightSensorPlugin* plugin = createPlugin();
     if (!plugin) {
         FreeLibrary(handle);
-        throw std::runtime_error(std::format(
-            "Failed to create plugin instance: {}", pluginPath
-        ));
+        std::ostringstream oss;
+        oss << "Failed to create plugin instance: " << pluginPath;
+        throw std::runtime_error(oss.str());
     }
 
     // プラグイン情報を保存
@@ -83,9 +83,10 @@ void PluginLoader::LoadPlugin(const std::string& pluginPath) {
     };
 
     const char* pluginName = plugin->GetPluginName();
-    if (m_plugins.contains(pluginName)) {
+    auto it = m_plugins.find(pluginName);
+    if (it != m_plugins.end()) {
         // 同名のプラグインが既に存在する場合は古いものをアンロード
-        UnloadPlugin(m_plugins[pluginName]);
+        UnloadPlugin(it->second);
     }
     m_plugins[pluginName] = std::move(info);
 }
@@ -115,19 +116,19 @@ std::unique_ptr<ILightSensor> PluginLoader::CreateSensor(
 ) {
     auto it = m_plugins.find(pluginName);
     if (it == m_plugins.end()) {
-        throw std::runtime_error(std::format(
-            "Plugin not found: {}", pluginName
-        ));
+        std::ostringstream oss;
+        oss << "Plugin not found: " << pluginName;
+        throw std::runtime_error(oss.str());
     }
 
     try {
         return it->second.plugin->CreateSensor(config);
     }
     catch (const std::exception& e) {
-        throw std::runtime_error(std::format(
-            "Failed to create sensor from plugin {}: {}",
-            pluginName, e.what()
-        ));
+        std::ostringstream oss;
+        oss << "Failed to create sensor from plugin " << pluginName
+            << ": " << e.what();
+        throw std::runtime_error(oss.str());
     }
 }
 
