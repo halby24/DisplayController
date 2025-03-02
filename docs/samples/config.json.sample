@@ -7,7 +7,11 @@
         "id": "YOUR_DEVICE_ID",
         "name": "Light Sensor 1",
         "type": "Light Sensor",
-        "description": "リビングの照度センサー"
+        "description": "リビングの照度センサー",
+        "calibration": {
+          "min_raw_value": 100,  // デバイスから期待される最小生値
+          "max_raw_value": 800   // デバイスから期待される最大生値
+        }
       }
     ]
   },
