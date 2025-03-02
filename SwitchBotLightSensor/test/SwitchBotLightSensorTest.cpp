@@ -20,9 +20,17 @@ protected:
     std::unique_ptr<MockHttpClient> mockClient;
     std::unique_ptr<SwitchBotLightSensor> sensor;
 
+    const std::string TEST_DEVICE_NAME = "Test Light Sensor";
+
     void SetUp() override {
-        mockClient = std::make_unique<MockHttpClient>(TEST_TOKEN);
-        sensor = std::make_unique<SwitchBotLightSensor>(TEST_TOKEN, TEST_DEVICE_ID);
+        // テスト用の設定を作成
+        auto& config = ConfigManager::Instance();
+        config.SetSwitchBotToken(TEST_TOKEN);
+        config.SetSwitchBotSecret("test-secret");
+        config.AddDevice(TEST_DEVICE_ID, TEST_DEVICE_NAME, "Light Sensor");
+
+        // センサーを初期化
+        sensor = std::make_unique<SwitchBotLightSensor>(TEST_DEVICE_NAME);
     }
 };
 
@@ -131,6 +139,101 @@ TEST_F(SwitchBotLightSensorTest, GetLightLevel_Normalization) {
                 {"deviceId", "test-device"},
                 {"deviceType", "WoLight"},
                 {"brightness", input}
+            }},
+            {"message", "success"}
+        };
+
+        EXPECT_CALL(*mockClient, Get(_))
+            .WillOnce(Return(response));
+
+        int level = sensor->GetLightLevel();
+        EXPECT_EQ(level, expected)
+            << "Input: " << input << ", Expected: " << expected << ", Actual: " << level;
+    }
+}
+
+// キャリブレーションテスト
+TEST_F(SwitchBotLightSensorTest, GetLightLevel_DefaultCalibration) {
+    // デフォルトのキャリブレーション設定でのテスト
+    nlohmann::json response = {
+        {"statusCode", 100},
+        {"body", {
+            {"deviceId", TEST_DEVICE_ID},
+            {"deviceType", "Light Sensor"},
+            {"lightLevel", 500}
+        }},
+        {"message", "success"}
+    };
+
+    EXPECT_CALL(*mockClient, Get(_))
+        .WillOnce(Return(response));
+
+    int level = sensor->GetLightLevel();
+    EXPECT_EQ(level, 50); // デフォルト設定（0-1000）での50%
+}
+
+TEST_F(SwitchBotLightSensorTest, GetLightLevel_CustomCalibration) {
+    // カスタムキャリブレーション設定を適用
+    CalibrationSettings settings{100, 900}; // 100-900の範囲
+    auto& config = ConfigManager::Instance();
+    config.SetDeviceCalibration(TEST_DEVICE_NAME, settings);
+
+    // 新しいセンサーを作成して設定を反映
+    sensor = std::make_unique<SwitchBotLightSensor>(TEST_DEVICE_NAME);
+
+    // テストケース
+    std::vector<std::pair<int, int>> testCases = {
+        {100, 0},   // 最小値
+        {900, 100}, // 最大値
+        {500, 50},  // 中間値
+        {300, 25},  // 25%
+        {700, 75}   // 75%
+    };
+
+    for (const auto& [input, expected] : testCases) {
+        nlohmann::json response = {
+            {"statusCode", 100},
+            {"body", {
+                {"deviceId", TEST_DEVICE_ID},
+                {"deviceType", "Light Sensor"},
+                {"lightLevel", input}
+            }},
+            {"message", "success"}
+        };
+
+        EXPECT_CALL(*mockClient, Get(_))
+            .WillOnce(Return(response));
+
+        int level = sensor->GetLightLevel();
+        EXPECT_EQ(level, expected)
+            << "Input: " << input << ", Expected: " << expected << ", Actual: " << level;
+    }
+}
+
+TEST_F(SwitchBotLightSensorTest, GetLightLevel_OutOfRange) {
+    // カスタムキャリブレーション設定を適用
+    CalibrationSettings settings{200, 800};
+    auto& config = ConfigManager::Instance();
+    config.SetDeviceCalibration(TEST_DEVICE_NAME, settings);
+
+    // 新しいセンサーを作成して設定を反映
+    sensor = std::make_unique<SwitchBotLightSensor>(TEST_DEVICE_NAME);
+
+    // 範囲外の値をテスト
+    std::vector<std::pair<int, int>> testCases = {
+        {0, 0},     // 最小値未満
+        {100, 0},   // 最小値未満
+        {1000, 100}, // 最大値超過
+        {900, 100}  // 最大値超過
+    };
+
+    for (const auto& [input, expected] : testCases) {
+        nlohmann::json response = {
+            {"statusCode", 100},
+            {"body", {
+                {"deviceId", TEST_DEVICE_ID},
+                {"deviceType", "Light Sensor"},
+                {"lightLevel", input}
             }},
             {"message", "success"}
         };

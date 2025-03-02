@@ -64,7 +64,30 @@ public:
 - **利点**: リソースリーク防止、例外安全性
 - **使用箇所**: モニターハンドル、同期スレッド
 
-### 4. エラーハンドリング
+### 4. エラー出力の標準化
+```cpp
+class StringUtils {
+public:
+    // エラーメッセージをコンソールに出力
+    static void OutputErrorMessage(const std::string& message);
+
+    // 例外からエラーメッセージを抽出して出力
+    static void OutputExceptionMessage(const std::exception& e);
+
+    // 文字コード変換
+    static std::string WideToUtf8(const std::wstring& wide);
+    static std::wstring Utf8ToWide(const std::string& utf8);
+};
+```
+
+- **パターン**: 統一的なエラー出力
+- **目的**: 文字化けのない一貫したエラーメッセージ表示
+- **処理方針**:
+  * UTF-8での内部管理
+  * Windows APIによる確実な文字出力
+  * エラーメッセージの標準化
+
+### 5. エラーハンドリング
 ```cpp
 // 基本例外クラス
 class DisplayControllerException : public std::runtime_error {};
@@ -127,6 +150,25 @@ class HttpClient {
   * タイムアウト設定
   * 自動リトライ
   * エラーハンドリング
+
+### 4. SwitchBotデバイス対応
+```cpp
+class SwitchBotLightSensor {
+    int GetLightLevel() {
+        auto status = GetDeviceStatus();
+        if (!status["body"].contains("lightLevel")) {
+            throw SwitchBotException("デバイスの応答に照度データが含まれていません");
+        }
+        return NormalizeLightLevel(status["body"]["lightLevel"].get<int>());
+    }
+};
+```
+
+- **パターン**: 機能ベースのデバイス検出
+- **特徴**:
+  * デバイスタイプではなく機能（lightLevelフィールド）に基づく判定
+  * 柔軟なデバイス対応
+  * エラー時の適切なフォールバック
 
 ## テストパターン
 

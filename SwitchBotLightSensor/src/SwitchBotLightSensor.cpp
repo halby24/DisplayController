@@ -1,13 +1,13 @@
 #include "SwitchBotLightSensor.h"
 #include "HttpClient.h"
 #include "SwitchBotException.h"
+#include "../../src/StringUtils.h"
 #include <sstream>
 #include <algorithm>
 #include <iostream>
 
 namespace {
     constexpr const char* API_BASE_URL = "https://api.switch-bot.com/v1.1/devices/";
-    constexpr int MAX_RAW_BRIGHTNESS = 1000; // SwitchBotの生の照度値の最大値
 }
 
 SwitchBotLightSensor::SwitchBotLightSensor(const std::string& deviceName)
@@ -15,8 +15,8 @@ SwitchBotLightSensor::SwitchBotLightSensor(const std::string& deviceName)
     , m_config(ConfigManager::Instance())
 {
     if (deviceName.empty()) {
-        std::cerr << "[SwitchBot] Error: Device name cannot be empty" << std::endl;
-        throw ConfigurationException("Device name cannot be empty");
+        StringUtils::OutputErrorMessage("[SwitchBot] Error: Device name cannot be empty");
+        throw ConfigurationException("デバイス名を指定してください");
     }
 
     try {
@@ -26,16 +26,32 @@ SwitchBotLightSensor::SwitchBotLightSensor(const std::string& deviceName)
         m_config.Load();
         std::cout << "[SwitchBot] Configuration loaded successfully" << std::endl;
 
+        // キャリブレーション設定を読み込み
+        try {
+            m_calibration = m_config.GetDeviceCalibration(deviceName);
+            std::cout << "[SwitchBot] Calibration settings loaded: min="
+                      << m_calibration.minRawValue << ", max="
+                      << m_calibration.maxRawValue << std::endl;
+        }
+        catch (const ConfigException& e) {
+            StringUtils::OutputMessage(
+                "[SwitchBot] Warning: Using default calibration settings - " +
+                std::string(e.what())
+            );
+            // デフォルト値を使用
+            m_calibration = CalibrationSettings();
+        }
+
         // APIトークンとシークレットを取得して初期化
         std::string token = m_config.GetSwitchBotToken();
         std::string secret = m_config.GetSwitchBotSecret();
         if (token.empty()) {
-            std::cerr << "[SwitchBot] Error: API token not configured" << std::endl;
-            throw ConfigurationException("SwitchBot API token not configured");
+            StringUtils::OutputErrorMessage("[SwitchBot] Error: API token not configured");
+            throw ConfigurationException("SwitchBot APIトークンが設定されていません");
         }
         if (secret.empty()) {
-            std::cerr << "[SwitchBot] Error: API secret not configured" << std::endl;
-            throw ConfigurationException("SwitchBot API secret not configured");
+            StringUtils::OutputErrorMessage("[SwitchBot] Error: API secret not configured");
+            throw ConfigurationException("SwitchBot APIシークレットが設定されていません");
         }
 
         // HTTPクライアントを初期化
@@ -43,8 +59,8 @@ SwitchBotLightSensor::SwitchBotLightSensor(const std::string& deviceName)
         std::cout << "[SwitchBot] HTTP client initialized successfully" << std::endl;
     }
     catch (const ConfigException& e) {
-        std::cerr << "[SwitchBot] Configuration Error: " << e.what() << std::endl;
-        throw ConfigurationException(std::string("Failed to load configuration: ") + e.what());
+        StringUtils::OutputExceptionMessage(e);
+        throw ConfigurationException(std::string("設定の読み込みに失敗しました: ") + e.what());
     }
 }
 
@@ -58,13 +74,13 @@ int SwitchBotLightSensor::GetLightLevel()
         auto status = GetDeviceStatus();
         std::cout << "[SwitchBot] Device status retrieved successfully" << std::endl;
 
-        // brightness フィールドを取得
-        if (!status["body"].contains("brightness")) {
-            std::cerr << "[SwitchBot] Error: Response does not contain brightness data" << std::endl;
-            throw SwitchBotException("Device response does not contain brightness data");
+        // lightLevel フィールドを取得
+        if (!status["body"].contains("lightLevel")) {
+            StringUtils::OutputErrorMessage("[SwitchBot] Error: Response does not contain light level data");
+            throw SwitchBotException("デバイスの応答に照度データが含まれていません");
         }
 
-        int rawBrightness = status["body"]["brightness"].get<int>();
+        int rawBrightness = status["body"]["lightLevel"].get<int>();
         std::cout << "[SwitchBot] Raw brightness value: " << rawBrightness << std::endl;
 
         int normalizedBrightness = NormalizeLightLevel(rawBrightness);
@@ -73,12 +89,12 @@ int SwitchBotLightSensor::GetLightLevel()
         return normalizedBrightness;
     }
     catch (const HttpException& e) {
-        std::cerr << "[SwitchBot] HTTP Error: " << e.what() << std::endl;
-        throw SwitchBotException(std::string("Failed to get light level: ") + e.what());
+        StringUtils::OutputErrorMessage("[SwitchBot] HTTP Error: " + std::string(e.what()));
+        throw SwitchBotException(std::string("照度の取得に失敗しました: ") + e.what());
     }
     catch (const nlohmann::json::exception& e) {
-        std::cerr << "[SwitchBot] JSON Parse Error: " << e.what() << std::endl;
-        throw SwitchBotException(std::string("Failed to parse device response: ") + e.what());
+        StringUtils::OutputErrorMessage("[SwitchBot] JSON Parse Error: " + std::string(e.what()));
+        throw SwitchBotException(std::string("デバイスの応答の解析に失敗しました: ") + e.what());
     }
 }
 
@@ -95,22 +111,22 @@ nlohmann::json SwitchBotLightSensor::GetDeviceStatus()
 
         // レスポンスのステータスコードを確認
         if (!response.contains("statusCode")) {
-            throw SwitchBotException("Invalid API response format");
+            throw SwitchBotException("APIレスポンスの形式が不正です");
         }
 
         int statusCode = response["statusCode"].get<int>();
         if (statusCode != 100) {
             switch (statusCode) {
                 case 401:
-                    std::cerr << "[SwitchBot] Authentication Error: Failed to authenticate with API" << std::endl;
-                    throw AuthenticationException("Authentication failed");
+                    StringUtils::OutputErrorMessage("[SwitchBot] Authentication Error: Failed to authenticate with API");
+                    throw AuthenticationException("APIの認証に失敗しました");
                 case 404:
-                    std::cerr << "[SwitchBot] Device Error: Device not found - " << deviceId << std::endl;
-                    throw DeviceNotFoundException("Device not found: " + deviceId);
+                    StringUtils::OutputErrorMessage("[SwitchBot] Device Error: Device not found - " + deviceId);
+                    throw DeviceNotFoundException("デバイスが見つかりません: " + deviceId);
                 default:
-                    std::cerr << "[SwitchBot] API Error: Request failed with status code " << statusCode << std::endl;
+                    StringUtils::OutputErrorMessage("[SwitchBot] API Error: Request failed with status code " + std::to_string(statusCode));
                     throw SwitchBotException(
-                        "API request failed with status code: " + std::to_string(statusCode),
+                        "APIリクエストが失敗しました（ステータスコード: " + std::to_string(statusCode) + "）",
                         statusCode
                     );
             }
@@ -119,13 +135,22 @@ nlohmann::json SwitchBotLightSensor::GetDeviceStatus()
         return response;
     }
     catch (const ConfigException& e) {
-        std::cerr << "[SwitchBot] Configuration Error: " << e.what() << std::endl;
+        StringUtils::OutputErrorMessage("[SwitchBot] Configuration Error: " + std::string(e.what()));
         throw SwitchBotException(std::string("Failed to get device configuration: ") + e.what());
     }
 }
 
 int SwitchBotLightSensor::NormalizeLightLevel(int rawLevel)
 {
-    // 0-1000の値を0-100に正規化
-    return std::clamp(static_cast<int>((static_cast<double>(rawLevel) / MAX_RAW_BRIGHTNESS) * 100), 0, 100);
+    // キャリブレーション設定に基づいて0-100にマッピング
+    int clampedRaw = std::clamp(
+        rawLevel,
+        m_calibration.minRawValue,
+        m_calibration.maxRawValue
+    );
+
+    double normalizedValue = (static_cast<double>(clampedRaw - m_calibration.minRawValue) /
+        (m_calibration.maxRawValue - m_calibration.minRawValue)) * 100.0;
+
+    return std::clamp(static_cast<int>(normalizedValue), 0, 100);
 }

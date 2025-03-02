@@ -5,6 +5,7 @@
 #include "DummyLightSensor.h"
 #include "SwitchBotLightSensor.h"
 #include "ConfigManager.h"
+#include "StringUtils.h"
 #include <memory>
 #include <string>
 
@@ -25,6 +26,13 @@ bool g_isConsoleVisible = false;
 HHOOK g_consoleHook = nullptr;  // コンソールウィンドウのフック
 HWND g_consoleWindow = nullptr; // コンソールウィンドウのハンドル
 
+// エラーメッセージを表示する関数
+void ShowErrorMessage(const std::string& message, const std::string& title = "エラー", UINT type = MB_OK | MB_ICONERROR) {
+    std::wstring wMessage = StringUtils::Utf8ToWide(message);
+    std::wstring wTitle = StringUtils::Utf8ToWide(title);
+    MessageBoxW(NULL, wMessage.c_str(), wTitle.c_str(), type);
+}
+
 // 関数プロトタイプ
 LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
 void InitializeWindow();
@@ -42,7 +50,7 @@ void InitializeConsole()
     // コンソールウィンドウの作成
     if (!AllocConsole())
     {
-        MessageBox(NULL, L"コンソールの作成に失敗しました", L"エラー", MB_OK | MB_ICONERROR);
+        ShowErrorMessage("コンソールの作成に失敗しました");
         return;
     }
 
@@ -51,7 +59,7 @@ void InitializeConsole()
     if (freopen_s(&fp, "CONOUT$", "w", stdout) != 0 ||
         freopen_s(&fp, "CONOUT$", "w", stderr) != 0)
     {
-        MessageBox(NULL, L"標準出力のリダイレクトに失敗しました", L"エラー", MB_OK | MB_ICONERROR);
+        ShowErrorMessage("標準出力のリダイレクトに失敗しました");
         return;
     }
 
@@ -65,7 +73,7 @@ void ToggleConsoleWindow()
     HWND consoleWindow = GetConsoleWindow();
     if (consoleWindow == NULL)
     {
-        MessageBox(NULL, L"コンソールウィンドウが見つかりません", L"エラー", MB_OK | MB_ICONERROR);
+        ShowErrorMessage("コンソールウィンドウが見つかりません");
         return;
     }
 
@@ -89,25 +97,43 @@ std::unique_ptr<ILightSensor> CreateLightSensor()
         auto &config = ConfigManager::Instance();
         config.Load();
 
-        // デバイス名は設定ファイルから取得するか、ハードコードする
-        // TODO: デバイス名を設定UIから設定できるようにする
-        return std::make_unique<SwitchBotLightSensor>("Light Sensor 1");
+        // Light Sensorタイプのデバイスを検索
+        if (config.HasDeviceType("Light Sensor"))
+        {
+            auto device = config.GetFirstDeviceByType("Light Sensor");
+            StringUtils::OutputMessage("Light Sensorデバイスを使用: " + device["name"].get<std::string>());
+            return std::make_unique<SwitchBotLightSensor>(device["name"].get<std::string>());
+        }
+        else
+        {
+            std::string message =
+                "Light Sensorタイプのデバイスが設定されていません。\n"
+                "設定ファイルにLight Sensorデバイスを追加してください。\n"
+                "一時的にダミーセンサーを使用します。";
+            ShowErrorMessage(message, "警告", MB_OK | MB_ICONWARNING);
+            StringUtils::OutputMessage(message);
+        }
     }
     catch (const ConfigException &e)
     {
-        std::string error = "設定の読み込みに失敗しました: ";
-        error += e.what();
-        MessageBoxA(NULL, error.c_str(), "エラー", MB_OK | MB_ICONWARNING);
+        std::string error =
+            std::string("設定の読み込みに失敗しました: ") + e.what() + "\n"
+            "設定ファイルを確認してください。\n"
+            "一時的にダミーセンサーを使用します。";
+        ShowErrorMessage(error, "エラー", MB_OK | MB_ICONWARNING);
+        StringUtils::OutputMessage(error);
     }
     catch (const std::exception &e)
     {
-        std::string error = "SwitchBotの初期化に失敗しました: ";
-        error += e.what();
-        MessageBoxA(NULL, error.c_str(), "エラー", MB_OK | MB_ICONWARNING);
+        std::string error =
+            std::string("SwitchBotの初期化に失敗しました: ") + e.what() + "\n"
+            "デバイスの接続状態を確認してください。\n"
+            "一時的にダミーセンサーを使用します。";
+        ShowErrorMessage(error, "エラー", MB_OK | MB_ICONWARNING);
+        StringUtils::OutputMessage(error);
     }
 
-    // 設定が無効な場合やエラーが発生した場合はダミーセンサーを使用
-    MessageBox(NULL, L"ダミーセンサーを使用します", L"情報", MB_OK | MB_ICONINFORMATION);
+    // エラー発生時はダミーセンサーを使用
     return std::make_unique<DummyLightSensor>();
 }
 
@@ -135,8 +161,23 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
     // BrightnessManagerの初期化
     g_brightnessManager = std::make_unique<BrightnessManager>(CreateLightSensor());
 
+    // 設定の適用
+    try {
+        auto& config = ConfigManager::Instance();
+        g_brightnessManager->SetUpdateInterval(std::chrono::milliseconds(config.GetUpdateInterval()));
+        g_brightnessManager->SetBrightnessRange(config.GetMinBrightness(), config.GetMaxBrightness());
+        StringUtils::OutputMessage("設定を読み込みました: "
+            "更新間隔=" + std::to_string(config.GetUpdateInterval()) + "ms, "
+            "輝度範囲=" + std::to_string(config.GetMinBrightness()) + "-" +
+            std::to_string(config.GetMaxBrightness()) + "%");
+    }
+    catch (const ConfigException& e) {
+        ShowErrorMessage(std::string("設定の読み込みに失敗しました: ") + e.what() + "\n"
+            "デフォルト値を使用します。", "警告", MB_OK | MB_ICONWARNING);
+    }
+
     // 初期化完了のログ出力
-    printf("BrightnessDaemon initialized successfully.\n");
+    StringUtils::OutputMessage("BrightnessDaemon initialized successfully.");
 
     // メッセージループ
     MSG msg = {};
@@ -208,7 +249,7 @@ void InitializeWindow()
 
     if (g_hwnd == NULL)
     {
-        MessageBox(NULL, L"ウィンドウの作成に失敗しました", L"エラー", MB_OK | MB_ICONERROR);
+        ShowErrorMessage("ウィンドウの作成に失敗しました");
         exit(1);
     }
 }
@@ -226,7 +267,7 @@ void InitializeTrayIcon()
 
     if (!Shell_NotifyIcon(NIM_ADD, &g_nid))
     {
-        MessageBox(NULL, L"タスクトレイアイコンの作成に失敗しました", L"エラー", MB_OK | MB_ICONERROR);
+        ShowErrorMessage("タスクトレイアイコンの作成に失敗しました");
         exit(1);
     }
 }

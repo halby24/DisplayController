@@ -156,7 +156,13 @@ nlohmann::json HttpClient::Get(const std::string& endpoint) {
 
     if (http_code != 200) {
         std::cerr << "[SwitchBot] HTTP request failed with code: " << http_code << std::endl;
-        throw HttpException("HTTP request failed with code: " + std::to_string(http_code));
+        std::cerr << "[SwitchBot] Response content: " << response_string << std::endl;
+
+        std::string error_message = "HTTP request failed with code: " + std::to_string(http_code);
+        if (http_code == 401) {
+            error_message += " (Unauthorized - Please check your token and secret)";
+        }
+        throw HttpException(error_message);
     }
 
     try {

@@ -1,111 +1,103 @@
 #include "MonitorController.h"
+#include "StringUtils.h"
 #include <iostream>
 #include <iomanip>
 #include <windows.h>
 
 void PrintMonitorInfo(const MonitorController::MonitorInfo& info, MonitorController& controller)
 {
-    // Convert wide string to UTF-8 for console output
-    int size = WideCharToMultiByte(CP_UTF8, 0, info.deviceName.c_str(), -1, nullptr, 0, nullptr, nullptr);
-    std::string deviceName(size, 0);
-    WideCharToMultiByte(CP_UTF8, 0, info.deviceName.c_str(), -1, &deviceName[0], size, nullptr, nullptr);
+    // デバイス名をUTF-8に変換
+    std::string deviceName = StringUtils::WideToUtf8(info.deviceName);
 
-    std::cout << "Device: " << deviceName << std::endl;
-    std::cout << "Primary: " << (info.isPrimary ? "Yes" : "No") << std::endl;
-    std::cout << "Position: "
-              << "Left=" << info.bounds.left << ", "
-              << "Top=" << info.bounds.top << ", "
-              << "Right=" << info.bounds.right << ", "
-              << "Bottom=" << info.bounds.bottom << std::endl;
-    std::cout << "Resolution: "
-              << (info.bounds.right - info.bounds.left) << "x"
-              << (info.bounds.bottom - info.bounds.top) << std::endl;
-
-    // Convert wide strings to UTF-8 for console output
-    auto toUtf8 = [](const std::wstring& ws) {
-        int size = WideCharToMultiByte(CP_UTF8, 0, ws.c_str(), -1, nullptr, 0, nullptr, nullptr);
-        std::string s(size, 0);
-        WideCharToMultiByte(CP_UTF8, 0, ws.c_str(), -1, &s[0], size, nullptr, nullptr);
-        return s;
-    };
+    StringUtils::OutputMessage("Device: " + deviceName);
+    StringUtils::OutputMessage("Primary: " + std::string(info.isPrimary ? "Yes" : "No"));
+    StringUtils::OutputMessage("Position: Left=" + std::to_string(info.bounds.left) +
+                             ", Top=" + std::to_string(info.bounds.top) +
+                             ", Right=" + std::to_string(info.bounds.right) +
+                             ", Bottom=" + std::to_string(info.bounds.bottom));
+    StringUtils::OutputMessage("Resolution: " +
+                             std::to_string(info.bounds.right - info.bounds.left) + "x" +
+                             std::to_string(info.bounds.bottom - info.bounds.top));
 
     // Get detailed monitor info
     try {
         controller.GetDetailedMonitorInfo(const_cast<MonitorController::MonitorInfo&>(info));
-        std::cout << "Manufacturer: " << toUtf8(info.manufacturerName) << std::endl;
-        std::cout << "Product Code: " << toUtf8(info.productCode) << std::endl;
-        std::cout << "Serial Number: " << toUtf8(info.serialNumber) << std::endl;
-        std::cout << "Friendly Name: " << toUtf8(info.friendlyName) << std::endl;
+        StringUtils::OutputMessage("Manufacturer: " + StringUtils::WideToUtf8(info.manufacturerName));
+        StringUtils::OutputMessage("Product Code: " + StringUtils::WideToUtf8(info.productCode));
+        StringUtils::OutputMessage("Serial Number: " + StringUtils::WideToUtf8(info.serialNumber));
+        StringUtils::OutputMessage("Friendly Name: " + StringUtils::WideToUtf8(info.friendlyName));
 
         // Load and display saved settings
         auto settings = controller.LoadMonitorSettings(info);
-        std::cout << "Saved Settings:" << std::endl;
-        std::cout << "  Brightness: " << settings.brightness << "%" << std::endl;
-        std::cout << "  Contrast: " << settings.contrast << "%" << std::endl;
-        std::cout << "  Color Temperature: " << settings.colorTemperature << "K" << std::endl;
+        StringUtils::OutputMessage("Saved Settings:");
+        StringUtils::OutputMessage("  Brightness: " + std::to_string(settings.brightness) + "%");
+        StringUtils::OutputMessage("  Contrast: " + std::to_string(settings.contrast) + "%");
+        StringUtils::OutputMessage("  Color Temperature: " + std::to_string(settings.colorTemperature) + "K");
 
         // Display mapping configuration
         auto mapping = controller.GetMappingConfig(info.id);
-        std::cout << "Brightness Mapping:" << std::endl;
-        std::cout << "  Min: " << mapping.minBrightness << "%" << std::endl;
-        std::cout << "  Max: " << mapping.maxBrightness << "%" << std::endl;
+        StringUtils::OutputMessage("Brightness Mapping:");
+        StringUtils::OutputMessage("  Min: " + std::to_string(mapping.minBrightness) + "%");
+        StringUtils::OutputMessage("  Max: " + std::to_string(mapping.maxBrightness) + "%");
         if (!mapping.mappingPoints.empty()) {
-            std::cout << "  Custom Points:" << std::endl;
+            StringUtils::OutputMessage("  Custom Points:");
             for (const auto& point : mapping.mappingPoints) {
-                std::cout << "    " << point.first << "% -> " << point.second << "%" << std::endl;
+                StringUtils::OutputMessage("    " + std::to_string(point.first) + "% -> " +
+                                         std::to_string(point.second) + "%");
             }
         }
     }
     catch (const WindowsApiException& e) {
-        std::cout << "Detailed Info: Unable to retrieve (Error: " << e.what() << ")" << std::endl;
+        StringUtils::OutputMessage("Detailed Info: Unable to retrieve (Error: " + std::string(e.what()) + ")");
     }
 
     // Get and display brightness
     try {
         int brightness = controller.GetBrightness(info.id);
-        std::cout << "Current Brightness: " << brightness << "%" << std::endl;
+        StringUtils::OutputMessage("Current Brightness: " + std::to_string(brightness) + "%");
     }
     catch (const WindowsApiException& e) {
-        std::cout << "Brightness: Unable to retrieve (Error: " << e.what() << ")" << std::endl;
+        StringUtils::OutputMessage("Brightness: Unable to retrieve (Error: " + std::string(e.what()) + ")");
     }
 
     // Get and display monitor capabilities
     try {
         auto caps = controller.GetMonitorCapabilities(info.id);
-        std::cout << "Display Technology: " << caps.technologyType << std::endl;
-        std::cout << "Capabilities:" << std::endl;
-        std::cout << "  - Brightness Control: " << (caps.supportsBrightness ? "Yes" : "No") << std::endl;
-        std::cout << "  - Contrast Control: " << (caps.supportsContrast ? "Yes" : "No") << std::endl;
-        std::cout << "  - Color Temperature: " << (caps.supportsColorTemperature ? "Yes" : "No") << std::endl;
+        StringUtils::OutputMessage("Display Technology: " + caps.technologyType);
+        StringUtils::OutputMessage("Capabilities:");
+        StringUtils::OutputMessage("  - Brightness Control: " + std::string(caps.supportsBrightness ? "Yes" : "No"));
+        StringUtils::OutputMessage("  - Contrast Control: " + std::string(caps.supportsContrast ? "Yes" : "No"));
+        StringUtils::OutputMessage("  - Color Temperature: " + std::string(caps.supportsColorTemperature ? "Yes" : "No"));
         if (caps.displaySize.cx > 0 && caps.displaySize.cy > 0) {
-            std::cout << "Display Size: " << caps.displaySize.cx << "mm x " << caps.displaySize.cy << "mm" << std::endl;
+            StringUtils::OutputMessage("Display Size: " + std::to_string(caps.displaySize.cx) + "mm x " +
+                                     std::to_string(caps.displaySize.cy) + "mm");
         }
         if (caps.supportsColorTemperature && caps.colorTemperature > 0) {
-            std::cout << "Color Temperature: " << caps.colorTemperature << "K" << std::endl;
+            StringUtils::OutputMessage("Color Temperature: " + std::to_string(caps.colorTemperature) + "K");
         }
     }
     catch (const WindowsApiException& e) {
-        std::cout << "Monitor Capabilities: Unable to retrieve" << std::endl;
+        StringUtils::OutputMessage("Monitor Capabilities: Unable to retrieve");
     }
 
-    std::cout << "-------------------" << std::endl;
+    StringUtils::OutputMessage("-------------------");
 }
 
 void PrintUsage()
 {
-    std::cout << "Usage: DisplayController.exe <command> [options]" << std::endl;
-    std::cout << "\nCommands:" << std::endl;
-    std::cout << "  list                        : モニター一覧の表示" << std::endl;
-    std::cout << "  get <monitor_id>            : 指定モニターの輝度取得" << std::endl;
-    std::cout << "  set <monitor_id> <value>    : 指定モニターの輝度設定" << std::endl;
-    std::cout << "  setall <value>              : 全モニターの輝度を統一的に設定" << std::endl;
-    std::cout << "  map <monitor_id> <options>  : モニターの輝度マッピング設定" << std::endl;
-    std::cout << "    options:" << std::endl;
-    std::cout << "      --min <value>           : 最小輝度値 (0-100)" << std::endl;
-    std::cout << "      --max <value>           : 最大輝度値 (0-100)" << std::endl;
-    std::cout << "      --point <in,out>        : マッピングポイントを追加 (複数指定可)" << std::endl;
-    std::cout << "      --reset                 : マッピング設定をリセット" << std::endl;
-    std::cout << "  help                        : このヘルプを表示" << std::endl;
+    StringUtils::OutputMessage("Usage: DisplayController.exe <command> [options]");
+    StringUtils::OutputMessage("\nCommands:");
+    StringUtils::OutputMessage("  list                        : モニター一覧の表示");
+    StringUtils::OutputMessage("  get <monitor_id>            : 指定モニターの輝度取得");
+    StringUtils::OutputMessage("  set <monitor_id> <value>    : 指定モニターの輝度設定");
+    StringUtils::OutputMessage("  setall <value>              : 全モニターの輝度を統一的に設定");
+    StringUtils::OutputMessage("  map <monitor_id> <options>  : モニターの輝度マッピング設定");
+    StringUtils::OutputMessage("    options:");
+    StringUtils::OutputMessage("      --min <value>           : 最小輝度値 (0-100)");
+    StringUtils::OutputMessage("      --max <value>           : 最大輝度値 (0-100)");
+    StringUtils::OutputMessage("      --point <in,out>        : マッピングポイントを追加 (複数指定可)");
+    StringUtils::OutputMessage("      --reset                 : マッピング設定をリセット");
+    StringUtils::OutputMessage("  help                        : このヘルプを表示");
 }
 
 int main(int argc, char* argv[])
@@ -133,8 +125,8 @@ int main(int argc, char* argv[])
         else if (command == "list")
         {
             auto monitors = controller.GetMonitors();
-            std::cout << "Found " << monitors.size() << " monitor(s):" << std::endl;
-            std::cout << "===================" << std::endl;
+            StringUtils::OutputMessage("Found " + std::to_string(monitors.size()) + " monitor(s):");
+            StringUtils::OutputMessage("===================");
             for (const auto& monitor : monitors)
             {
                 PrintMonitorInfo(monitor, controller);
@@ -144,7 +136,7 @@ int main(int argc, char* argv[])
         {
             if (argc < 3)
             {
-                std::cerr << "Error: get command requires a monitor ID" << std::endl;
+                StringUtils::OutputErrorMessage("Error: get command requires a monitor ID");
                 return 1;
             }
 
@@ -152,18 +144,19 @@ int main(int argc, char* argv[])
             int monitorIndex = std::stoi(argv[2]);
             if (monitorIndex < 0 || monitorIndex >= static_cast<int>(monitors.size()))
             {
-                std::cerr << "Error: Invalid monitor ID" << std::endl;
+                StringUtils::OutputErrorMessage("Error: Invalid monitor ID");
                 return 1;
             }
 
             int brightness = controller.GetBrightness(monitors[monitorIndex].id);
-            std::cout << "Monitor " << monitorIndex << " brightness: " << brightness << "%" << std::endl;
+            StringUtils::OutputMessage("Monitor " + std::to_string(monitorIndex) + " brightness: " +
+                                     std::to_string(brightness) + "%");
         }
         else if (command == "set")
         {
             if (argc < 4)
             {
-                std::cerr << "Error: set command requires a monitor ID and brightness value" << std::endl;
+                StringUtils::OutputErrorMessage("Error: set command requires a monitor ID and brightness value");
                 return 1;
             }
 
@@ -171,18 +164,19 @@ int main(int argc, char* argv[])
             int monitorIndex = std::stoi(argv[2]);
             if (monitorIndex < 0 || monitorIndex >= static_cast<int>(monitors.size()))
             {
-                std::cerr << "Error: Invalid monitor ID" << std::endl;
+                StringUtils::OutputErrorMessage("Error: Invalid monitor ID");
                 return 1;
             }
 
             int brightness = std::stoi(argv[3]);
             if (controller.SetBrightness(monitors[monitorIndex].id, brightness))
             {
-                std::cout << "Monitor " << monitorIndex << " brightness set to " << brightness << "%" << std::endl;
+                StringUtils::OutputMessage("Monitor " + std::to_string(monitorIndex) + " brightness set to " +
+                                         std::to_string(brightness) + "%");
             }
             else
             {
-                std::cerr << "Error: Failed to set brightness" << std::endl;
+                StringUtils::OutputErrorMessage("Error: Failed to set brightness");
                 return 1;
             }
         }
@@ -190,18 +184,18 @@ int main(int argc, char* argv[])
         {
             if (argc < 3)
             {
-                std::cerr << "Error: setall command requires a brightness value" << std::endl;
+                StringUtils::OutputErrorMessage("Error: setall command requires a brightness value");
                 return 1;
             }
 
             int brightness = std::stoi(argv[2]);
             if (controller.SetUnifiedBrightness(brightness))
             {
-                std::cout << "All monitors brightness set to " << brightness << "%" << std::endl;
+                StringUtils::OutputMessage("All monitors brightness set to " + std::to_string(brightness) + "%");
             }
             else
             {
-                std::cerr << "Error: Failed to set brightness for some monitors" << std::endl;
+                StringUtils::OutputErrorMessage("Error: Failed to set brightness for some monitors");
                 return 1;
             }
         }
@@ -209,7 +203,7 @@ int main(int argc, char* argv[])
         {
             if (argc < 4)
             {
-                std::cerr << "Error: map command requires a monitor ID and options" << std::endl;
+                StringUtils::OutputErrorMessage("Error: map command requires a monitor ID and options");
                 return 1;
             }
 
@@ -217,7 +211,7 @@ int main(int argc, char* argv[])
             int monitorIndex = std::stoi(argv[2]);
             if (monitorIndex < 0 || monitorIndex >= static_cast<int>(monitors.size()))
             {
-                std::cerr << "Error: Invalid monitor ID" << std::endl;
+                StringUtils::OutputErrorMessage("Error: Invalid monitor ID");
                 return 1;
             }
 
@@ -253,11 +247,11 @@ int main(int argc, char* argv[])
             }
 
             controller.SetMappingConfig(id, config);
-            std::cout << "Mapping configuration updated for monitor " << monitorIndex << std::endl;
+            StringUtils::OutputMessage("Mapping configuration updated for monitor " + std::to_string(monitorIndex));
         }
         else
         {
-            std::cerr << "Error: Unknown command '" << command << "'" << std::endl;
+            StringUtils::OutputErrorMessage("Error: Unknown command '" + command + "'");
             PrintUsage();
             return 1;
         }
@@ -266,12 +260,12 @@ int main(int argc, char* argv[])
     }
     catch (const DisplayControllerException& e)
     {
-        std::cerr << "Error: " << e.what() << std::endl;
+        StringUtils::OutputExceptionMessage(e);
         return 1;
     }
     catch (const std::exception& e)
     {
-        std::cerr << "Unexpected error: " << e.what() << std::endl;
+        StringUtils::OutputErrorMessage("Unexpected error: " + std::string(e.what()));
         return 1;
     }
 }

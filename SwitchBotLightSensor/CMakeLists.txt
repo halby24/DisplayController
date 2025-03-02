@@ -13,6 +13,7 @@ set(SOURCES
     src/SwitchBotLightSensor.cpp
     src/HttpClient.cpp
     ../src/ConfigManager.cpp
+    ../src/StringUtils.cpp
 )
 
 # ヘッダーファイル
@@ -21,6 +22,7 @@ set(HEADERS
     include/HttpClient.h
     include/SwitchBotException.h
     ../src/ConfigManager.h
+    ../src/StringUtils.h
 )
 
 # DLLターゲットの作成

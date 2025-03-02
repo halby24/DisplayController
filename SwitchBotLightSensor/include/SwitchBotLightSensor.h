@@ -19,6 +19,7 @@ private:
     std::string m_deviceName;
     std::unique_ptr<HttpClient> m_httpClient;
     ConfigManager& m_config;
+    CalibrationSettings m_calibration;
 
 public:
     explicit SwitchBotLightSensor(const std::string& deviceName);

@@ -70,6 +70,8 @@ set(DAEMON_SOURCES
     src/ILightSensor.h
     src/ConfigManager.cpp
     src/ConfigManager.h
+    src/StringUtils.cpp
+    src/StringUtils.h
 )
 
 # Add SwitchBot Light Sensor
