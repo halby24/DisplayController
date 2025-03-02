@@ -20,7 +20,7 @@ target_include_directories(plugin_loader_test PRIVATE
 target_link_libraries(plugin_loader_test PRIVATE
     GTest::gtest
     GTest::gtest_main
-    PluginLoader  # メインプロジェクトのライブラリ
+    DisplayController  # メインプロジェクトのライブラリ
 )
 
 # C++17を使用

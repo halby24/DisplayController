@@ -1,7 +1,7 @@
 #include "SwitchBotLightSensor.h"
 #include "HttpClient.h"
 #include "SwitchBotException.h"
-#include "../../src/StringUtils.h"
+#include <common/StringUtils.h>
 #include <sstream>
 #include <algorithm>
 #include <iostream>
@@ -10,17 +10,30 @@ namespace {
     constexpr const char* API_BASE_URL = "https://api.switch-bot.com/v1.1/devices/";
 }
 
-SwitchBotLightSensor::SwitchBotLightSensor(const std::string& deviceName)
-    : m_deviceName(deviceName)
+SwitchBotLightSensor::SwitchBotLightSensor(
+    const std::string& token,
+    const std::string& deviceId,
+    int retryCount,
+    int retryInterval
+)
+    : m_token(token)
+    , m_deviceId(deviceId)
+    , m_retryCount(retryCount)
+    , m_retryInterval(retryInterval)
     , m_config(ConfigManager::Instance())
 {
-    if (deviceName.empty()) {
-        StringUtils::OutputErrorMessage("[SwitchBot] Error: Device name cannot be empty");
-        throw ConfigurationException("デバイス名を指定してください");
+    if (token.empty()) {
+        StringUtils::OutputErrorMessage("[SwitchBot] Error: Token cannot be empty");
+        throw ConfigurationException("APIトークンを指定してください");
+    }
+
+    if (deviceId.empty()) {
+        StringUtils::OutputErrorMessage("[SwitchBot] Error: Device ID cannot be empty");
+        throw ConfigurationException("デバイスIDを指定してください");
     }
 
     try {
-        std::cout << "[SwitchBot] Initializing device: " << deviceName << std::endl;
+        std::cout << "[SwitchBot] Initializing device: " << deviceId << std::endl;
 
         // 設定を読み込み
         m_config.Load();
@@ -28,7 +41,7 @@ SwitchBotLightSensor::SwitchBotLightSensor(const std::string& deviceName)
 
         // キャリブレーション設定を読み込み
         try {
-            m_calibration = m_config.GetDeviceCalibration(deviceName);
+            m_calibration = m_config.GetDeviceCalibration(deviceId);
             std::cout << "[SwitchBot] Calibration settings loaded: min="
                       << m_calibration.minRawValue << ", max="
                       << m_calibration.maxRawValue << std::endl;
@@ -42,20 +55,8 @@ SwitchBotLightSensor::SwitchBotLightSensor(const std::string& deviceName)
             m_calibration = CalibrationSettings();
         }
 
-        // APIトークンとシークレットを取得して初期化
-        std::string token = m_config.GetSwitchBotToken();
-        std::string secret = m_config.GetSwitchBotSecret();
-        if (token.empty()) {
-            StringUtils::OutputErrorMessage("[SwitchBot] Error: API token not configured");
-            throw ConfigurationException("SwitchBot APIトークンが設定されていません");
-        }
-        if (secret.empty()) {
-            StringUtils::OutputErrorMessage("[SwitchBot] Error: API secret not configured");
-            throw ConfigurationException("SwitchBot APIシークレットが設定されていません");
-        }
-
         // HTTPクライアントを初期化
-        m_httpClient = std::make_unique<HttpClient>(token, secret);
+        m_httpClient = std::make_unique<HttpClient>(token, m_retryCount, m_retryInterval);
         std::cout << "[SwitchBot] HTTP client initialized successfully" << std::endl;
     }
     catch (const ConfigException& e) {
@@ -69,7 +70,7 @@ SwitchBotLightSensor::~SwitchBotLightSensor() = default;
 int SwitchBotLightSensor::GetLightLevel()
 {
     try {
-        std::cout << "[SwitchBot] Getting light level for device: " << m_deviceName << std::endl;
+        std::cout << "[SwitchBot] Getting light level for device: " << m_deviceId << std::endl;
 
         auto status = GetDeviceStatus();
         std::cout << "[SwitchBot] Device status retrieved successfully" << std::endl;
@@ -101,11 +102,8 @@ int SwitchBotLightSensor::GetLightLevel()
 nlohmann::json SwitchBotLightSensor::GetDeviceStatus()
 {
     try {
-        // デバイスIDを取得
-        std::string deviceId = m_config.GetDeviceId(m_deviceName);
-
         std::stringstream url;
-        url << API_BASE_URL << deviceId << "/status";
+        url << API_BASE_URL << m_deviceId << "/status";
 
         auto response = m_httpClient->Get(url.str());
 
@@ -121,8 +119,8 @@ nlohmann::json SwitchBotLightSensor::GetDeviceStatus()
                     StringUtils::OutputErrorMessage("[SwitchBot] Authentication Error: Failed to authenticate with API");
                     throw AuthenticationException("APIの認証に失敗しました");
                 case 404:
-                    StringUtils::OutputErrorMessage("[SwitchBot] Device Error: Device not found - " + deviceId);
-                    throw DeviceNotFoundException("デバイスが見つかりません: " + deviceId);
+                    StringUtils::OutputErrorMessage("[SwitchBot] Device Error: Device not found - " + m_deviceId);
+                    throw DeviceNotFoundException("デバイスが見つかりません: " + m_deviceId);
                 default:
                     StringUtils::OutputErrorMessage("[SwitchBot] API Error: Request failed with status code " + std::to_string(statusCode));
                     throw SwitchBotException(
