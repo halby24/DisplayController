@@ -6,14 +6,10 @@
 #include "ILightSensor.h"
 
 // DLLエクスポート/インポートマクロ
-#ifdef _WIN32
-    #ifdef PLUGIN_EXPORTS
-        #define PLUGIN_API __declspec(dllexport)
-    #else
-        #define PLUGIN_API __declspec(dllimport)
-    #endif
+#ifdef PLUGIN_EXPORTS
+    #define PLUGIN_API __declspec(dllexport)
 #else
-    #define PLUGIN_API
+    #define PLUGIN_API __declspec(dllimport)
 #endif
 
 using json = nlohmann::json;

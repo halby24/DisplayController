@@ -13,13 +13,6 @@ add_library(SwitchBotLightSensor SHARED
     ${CMAKE_CURRENT_SOURCE_DIR}/src/HttpClient.cpp
 )
 
-# プラグインのエクスポートマクロとUnicodeサポートを定義
-target_compile_definitions(SwitchBotLightSensor PRIVATE
-    PLUGIN_EXPORTS
-    _UNICODE
-    UNICODE
-)
-
 # インクルードディレクトリの設定
 target_include_directories(SwitchBotLightSensor PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/include
