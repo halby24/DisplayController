@@ -59,6 +59,23 @@ if(MSVC)
     target_compile_options(SwitchBotLightSensor PRIVATE /utf-8 /W4)
 endif()
 
+# ビルド時のプラグインディレクトリ設定
+set(RUNTIME_PLUGINS_DIR "${CMAKE_BINARY_DIR}/bin/$<CONFIG>/plugins")
+
+# プラグインディレクトリを作成
+add_custom_command(
+    TARGET SwitchBotLightSensor POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E make_directory "${RUNTIME_PLUGINS_DIR}"
+)
+
+# プラグインDLLをコピー
+add_custom_command(
+    TARGET SwitchBotLightSensor POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        "$<TARGET_FILE:SwitchBotLightSensor>"
+        "${RUNTIME_PLUGINS_DIR}"
+)
+
 # インストール設定
 install(TARGETS SwitchBotLightSensor
     RUNTIME DESTINATION plugins

@@ -101,6 +101,24 @@ target_link_libraries(BrightnessDaemon PRIVATE
     DisplayControllerCommon
 )
 
+# ビルド時のプラグインディレクトリ設定
+set(RUNTIME_PLUGINS_DIR "${CMAKE_BINARY_DIR}/bin/$<CONFIG>/plugins")
+
+# プラグインディレクトリを作成
+add_custom_command(
+    TARGET BrightnessDaemon POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E make_directory "${RUNTIME_PLUGINS_DIR}"
+)
+
+# プラグインDLLをコピー
+add_custom_command(
+    TARGET BrightnessDaemon POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        "$<TARGET_FILE:DummyLightSensor>"
+        "$<TARGET_FILE:SwitchBotLightSensor>"
+        "${RUNTIME_PLUGINS_DIR}"
+)
+
 # インストール設定
 install(TARGETS
     DisplayControllerLib

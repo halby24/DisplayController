@@ -1,23 +1,21 @@
-# プロジェクト進捗状況
+# 進捗状況
 
-## 2025/03/02 - リファクタリング：コンポーネントの分離と名称変更
+## 2025/03/02 - プラグインDLLのビルド時コピー機能の実装
 
 ### 完了した作業
-- CMakeLists.txtの更新
-  - DisplayControllerLib（共有ライブラリ）の定義
-  - DisplayControllerCLI（CLIツール）の定義
-  - BrightnessDaemon（システムトレイアプリケーション）の定義
-  - インストール設定の更新
+1. CMakeListsファイルの修正
+   - ルートCMakeListsファイル：
+     - BrightnessDaemonのビルド後にプラグインディレクトリを作成
+     - DummyLightSensorとSwitchBotLightSensorのDLLを自動的にコピー
+   - DummyLightSensorのCMakeListsファイル：
+     - 単体ビルド時のDLLコピー処理を追加
+   - SwitchBotLightSensorのCMakeListsファイル：
+     - 単体ビルド時のDLLコピー処理を追加
 
 ### 次のステップ
-1. ビルドテスト
-   - 新しい構成でのビルド確認
-   - 各コンポーネントの動作確認
-
-2. 必要に応じたヘッダーファイルの更新
-   - エクスポートマクロの確認
-   - インクルードパスの確認
-
-3. ドキュメントの更新
-   - READMEの更新（必要な場合）
-   - ビルド手順の確認と更新
+1. 変更のコミット
+   - コミットメッセージ：「feat: プラグインDLLのビルド時コピー機能を追加」
+   - 変更ファイル：
+     - CMakeLists.txt
+     - plugins/DummyLightSensor/CMakeLists.txt
+     - plugins/SwitchBotLightSensor/CMakeLists.txt
