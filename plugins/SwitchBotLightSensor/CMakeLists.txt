@@ -4,8 +4,8 @@ project(SwitchBotLightSensor VERSION 1.0.0)
 # プラグインのビルド設定
 add_library(SwitchBotLightSensor SHARED
     ${CMAKE_CURRENT_SOURCE_DIR}/src/SwitchBotPlugin.cpp
-    ${CMAKE_SOURCE_DIR}/SwitchBotLightSensor/src/SwitchBotLightSensor.cpp
-    ${CMAKE_SOURCE_DIR}/SwitchBotLightSensor/src/HttpClient.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/SwitchBotLightSensor.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/HttpClient.cpp
 )
 
 # プラグインのエクスポートマクロを定義
@@ -17,7 +17,6 @@ target_compile_definitions(SwitchBotLightSensor PRIVATE
 target_include_directories(SwitchBotLightSensor PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/include
     ${CMAKE_SOURCE_DIR}/src
-    ${CMAKE_SOURCE_DIR}/SwitchBotLightSensor/include
 )
 
 # 依存ライブラリの設定
