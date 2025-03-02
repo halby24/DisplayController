@@ -2,12 +2,12 @@
 #include <shellapi.h>
 #include <fstream>
 #include "BrightnessManager.h"
-#include "DummyLightSensor.h"
-#include "SwitchBotLightSensor.h"
+#include "PluginLoader.h"
 #include "ConfigManager.h"
 #include "StringUtils.h"
 #include <memory>
 #include <string>
+#include <filesystem>
 
 // タスクトレイアイコンの定数
 #define WM_APP_NOTIFY (WM_APP + 1)
@@ -21,6 +21,7 @@ HINSTANCE g_hInstance;
 HWND g_hwnd;
 NOTIFYICONDATA g_nid;
 std::unique_ptr<BrightnessManager> g_brightnessManager;
+std::unique_ptr<PluginLoader> g_pluginLoader;
 bool g_isSyncEnabled = false;
 bool g_isConsoleVisible = false;
 HHOOK g_consoleHook = nullptr;  // コンソールウィンドウのフック
@@ -45,11 +46,9 @@ void Cleanup();
 std::unique_ptr<ILightSensor> CreateLightSensor();
 
 // コンソール管理
-void InitializeConsole()
-{
+void InitializeConsole() {
     // コンソールウィンドウの作成
-    if (!AllocConsole())
-    {
+    if (!AllocConsole()) {
         ShowErrorMessage("コンソールの作成に失敗しました");
         return;
     }
@@ -57,8 +56,7 @@ void InitializeConsole()
     // 標準出力のリダイレクト
     FILE *fp;
     if (freopen_s(&fp, "CONOUT$", "w", stdout) != 0 ||
-        freopen_s(&fp, "CONOUT$", "w", stderr) != 0)
-    {
+        freopen_s(&fp, "CONOUT$", "w", stderr) != 0) {
         ShowErrorMessage("標準出力のリダイレクトに失敗しました");
         return;
     }
@@ -68,77 +66,73 @@ void InitializeConsole()
     g_isConsoleVisible = false;
 }
 
-void ToggleConsoleWindow()
-{
+void ToggleConsoleWindow() {
     HWND consoleWindow = GetConsoleWindow();
-    if (consoleWindow == NULL)
-    {
+    if (consoleWindow == NULL) {
         ShowErrorMessage("コンソールウィンドウが見つかりません");
         return;
     }
 
-    if (g_isConsoleVisible)
-    {
+    if (g_isConsoleVisible) {
         ShowWindow(consoleWindow, SW_HIDE);
         g_isConsoleVisible = false;
     }
-    else
-    {
+    else {
         ShowWindow(consoleWindow, SW_SHOW);
         g_isConsoleVisible = true;
     }
 }
 
 // センサーの作成
-std::unique_ptr<ILightSensor> CreateLightSensor()
-{
-    try
-    {
-        auto &config = ConfigManager::Instance();
+std::unique_ptr<ILightSensor> CreateLightSensor() {
+    try {
+        auto& config = ConfigManager::Instance();
         config.Load();
 
-        // Light Sensorタイプのデバイスを検索
-        if (config.HasDeviceType("Light Sensor"))
-        {
-            auto device = config.GetFirstDeviceByType("Light Sensor");
-            StringUtils::OutputMessage("Light Sensorデバイスを使用: " + device["name"].get<std::string>());
-            return std::make_unique<SwitchBotLightSensor>(device["name"].get<std::string>());
+        // プラグインディレクトリの設定
+        std::filesystem::path pluginDir = std::filesystem::current_path() / "plugins";
+        if (!std::filesystem::exists(pluginDir)) {
+            std::filesystem::create_directory(pluginDir);
         }
-        else
-        {
+
+        // プラグインの読み込み
+        g_pluginLoader = std::make_unique<PluginLoader>();
+        size_t loadedCount = g_pluginLoader->LoadPlugins(pluginDir.string());
+        StringUtils::OutputMessage("プラグインを読み込みました: " + std::to_string(loadedCount) + "個");
+
+        // センサー設定の取得
+        if (config.HasDeviceType("Light Sensor")) {
+            auto device = config.GetFirstDeviceByType("Light Sensor");
+            const std::string& pluginName = device["plugin"].get<std::string>();
+
+            StringUtils::OutputMessage("Light Sensorプラグインを使用: " + pluginName);
+            return g_pluginLoader->CreateSensor(pluginName, device);
+        }
+        else {
             std::string message =
                 "Light Sensorタイプのデバイスが設定されていません。\n"
                 "設定ファイルにLight Sensorデバイスを追加してください。\n"
                 "一時的にダミーセンサーを使用します。";
             ShowErrorMessage(message, "警告", MB_OK | MB_ICONWARNING);
             StringUtils::OutputMessage(message);
+
+            // ダミーセンサープラグインを使用
+            return g_pluginLoader->CreateSensor("DummyLightSensor", json::object());
         }
     }
-    catch (const ConfigException &e)
-    {
+    catch (const std::exception& e) {
         std::string error =
-            std::string("設定の読み込みに失敗しました: ") + e.what() + "\n"
-            "設定ファイルを確認してください。\n"
+            std::string("センサーの初期化に失敗しました: ") + e.what() + "\n"
             "一時的にダミーセンサーを使用します。";
         ShowErrorMessage(error, "エラー", MB_OK | MB_ICONWARNING);
         StringUtils::OutputMessage(error);
-    }
-    catch (const std::exception &e)
-    {
-        std::string error =
-            std::string("SwitchBotの初期化に失敗しました: ") + e.what() + "\n"
-            "デバイスの接続状態を確認してください。\n"
-            "一時的にダミーセンサーを使用します。";
-        ShowErrorMessage(error, "エラー", MB_OK | MB_ICONWARNING);
-        StringUtils::OutputMessage(error);
-    }
 
-    // エラー発生時はダミーセンサーを使用
-    return std::make_unique<DummyLightSensor>();
+        // エラー時はダミーセンサープラグインを使用
+        return g_pluginLoader->CreateSensor("DummyLightSensor", json::object());
+    }
 }
 
-int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nCmdShow)
-{
+int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nCmdShow) {
     g_hInstance = hInstance;
 
     // ウィンドウクラスの登録
@@ -181,8 +175,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 
     // メッセージループ
     MSG msg = {};
-    while (GetMessage(&msg, NULL, 0, 0))
-    {
+    while (GetMessage(&msg, NULL, 0, 0)) {
         TranslateMessage(&msg);
         DispatchMessage(&msg);
     }
@@ -191,15 +184,11 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
     return 0;
 }
 
-LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
-{
-    switch (uMsg)
-    {
+LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
+    switch (uMsg) {
     case WM_APP_NOTIFY:
-        switch (LOWORD(lParam))
-        {
-        case WM_RBUTTONUP:
-        {
+        switch (LOWORD(lParam)) {
+        case WM_RBUTTONUP: {
             POINT pt;
             GetCursorPos(&pt);
             ShowContextMenu(hwnd, pt);
@@ -209,8 +198,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
         break;
 
     case WM_COMMAND:
-        switch (LOWORD(wParam))
-        {
+        switch (LOWORD(wParam)) {
         case ID_MENU_EXIT:
             DestroyWindow(hwnd);
             return 0;
@@ -233,8 +221,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
     return DefWindowProc(hwnd, uMsg, wParam, lParam);
 }
 
-void InitializeWindow()
-{
+void InitializeWindow() {
     g_hwnd = CreateWindowEx(
         0,
         L"BrightnessDaemonClass",
@@ -247,15 +234,13 @@ void InitializeWindow()
         g_hInstance,
         NULL);
 
-    if (g_hwnd == NULL)
-    {
+    if (g_hwnd == NULL) {
         ShowErrorMessage("ウィンドウの作成に失敗しました");
         exit(1);
     }
 }
 
-void InitializeTrayIcon()
-{
+void InitializeTrayIcon() {
     g_nid = {};
     g_nid.cbSize = sizeof(NOTIFYICONDATA);
     g_nid.hWnd = g_hwnd;
@@ -265,18 +250,15 @@ void InitializeTrayIcon()
     g_nid.hIcon = LoadIcon(NULL, IDI_APPLICATION); // デフォルトアイコンを使用
     wcscpy_s(g_nid.szTip, L"BrightnessDaemon");
 
-    if (!Shell_NotifyIcon(NIM_ADD, &g_nid))
-    {
+    if (!Shell_NotifyIcon(NIM_ADD, &g_nid)) {
         ShowErrorMessage("タスクトレイアイコンの作成に失敗しました");
         exit(1);
     }
 }
 
-void ShowContextMenu(HWND hwnd, POINT pt)
-{
+void ShowContextMenu(HWND hwnd, POINT pt) {
     HMENU hMenu = CreatePopupMenu();
-    if (hMenu)
-    {
+    if (hMenu) {
         InsertMenu(hMenu, -1, MF_BYPOSITION | MF_STRING, ID_MENU_TOGGLE,
                    g_isSyncEnabled ? L"同期を停止" : L"同期を開始");
         InsertMenu(hMenu, -1, MF_BYPOSITION | MF_STRING, ID_MENU_TOGGLE_CONSOLE,
@@ -291,39 +273,35 @@ void ShowContextMenu(HWND hwnd, POINT pt)
     }
 }
 
-void ToggleSync()
-{
-    if (g_isSyncEnabled)
-    {
+void ToggleSync() {
+    if (g_isSyncEnabled) {
         g_brightnessManager->StopSync();
         g_isSyncEnabled = false;
     }
-    else
-    {
+    else {
         g_brightnessManager->StartSync();
         g_isSyncEnabled = true;
     }
 }
 
-void Cleanup()
-{
+void Cleanup() {
     // タスクトレイアイコンの削除
     Shell_NotifyIcon(NIM_DELETE, &g_nid);
 
     // BrightnessManagerの停止
-    if (g_brightnessManager)
-    {
+    if (g_brightnessManager) {
         g_brightnessManager->StopSync();
     }
 
+    // プラグインローダーのクリーンアップ
+    g_pluginLoader.reset();
+
     // コンソールのクリーンアップ
-    if (g_consoleHook)
-    {
+    if (g_consoleHook) {
         UnhookWindowsHookEx(g_consoleHook);
         g_consoleHook = nullptr;
     }
-    if (g_consoleWindow)
-    {
+    if (g_consoleWindow) {
         FreeConsole();
         g_consoleWindow = nullptr;
     }
