@@ -19,7 +19,7 @@
 // グローバル変数
 HINSTANCE g_hInstance;
 HWND g_hwnd;
-NOTIFYICONDATA g_nid;
+NOTIFYICONDATAW g_nid;
 std::unique_ptr<BrightnessManager> g_brightnessManager;
 std::unique_ptr<PluginLoader> g_pluginLoader;
 bool g_isSyncEnabled = false;
@@ -47,13 +47,11 @@ std::unique_ptr<ILightSensor> CreateLightSensor();
 
 // コンソール管理
 void InitializeConsole() {
-    // コンソールウィンドウの作成
     if (!AllocConsole()) {
         ShowErrorMessage("コンソールの作成に失敗しました");
         return;
     }
 
-    // 標準出力のリダイレクト
     FILE *fp;
     if (freopen_s(&fp, "CONOUT$", "w", stdout) != 0 ||
         freopen_s(&fp, "CONOUT$", "w", stderr) != 0) {
@@ -61,7 +59,6 @@ void InitializeConsole() {
         return;
     }
 
-    // 初期状態では非表示
     ShowWindow(GetConsoleWindow(), SW_HIDE);
     g_isConsoleVisible = false;
 }
@@ -89,45 +86,31 @@ std::unique_ptr<ILightSensor> CreateLightSensor() {
         auto& config = ConfigManager::Instance();
         config.Load();
 
-        // プラグインディレクトリの設定
         std::filesystem::path pluginDir = std::filesystem::current_path() / "plugins";
         if (!std::filesystem::exists(pluginDir)) {
             std::filesystem::create_directory(pluginDir);
         }
 
-        // プラグインの読み込み
         g_pluginLoader = std::make_unique<PluginLoader>();
         size_t loadedCount = g_pluginLoader->LoadPlugins(pluginDir.string());
         StringUtils::OutputMessage("プラグインを読み込みました: " + std::to_string(loadedCount) + "個");
 
-        // センサー設定の取得
         if (config.HasDeviceType("Light Sensor")) {
             auto device = config.GetFirstDeviceByType("Light Sensor");
             const std::string& pluginName = device["plugin"].get<std::string>();
-
             StringUtils::OutputMessage("Light Sensorプラグインを使用: " + pluginName);
             return g_pluginLoader->CreateSensor(pluginName, device);
         }
         else {
-            std::string message =
-                "Light Sensorタイプのデバイスが設定されていません。\n"
-                "設定ファイルにLight Sensorデバイスを追加してください。\n"
-                "一時的にダミーセンサーを使用します。";
-            ShowErrorMessage(message, "警告", MB_OK | MB_ICONWARNING);
-            StringUtils::OutputMessage(message);
-
-            // ダミーセンサープラグインを使用
+            StringUtils::OutputMessage("Light Sensorタイプのデバイスが設定されていません。設定ファイルにLight Sensorデバイスを追加してください。一時的にダミーセンサーを使用します。");
+            ShowErrorMessage("Light Sensorタイプのデバイスが設定されていません。設定ファイルにLight Sensorデバイスを追加してください。一時的にダミーセンサーを使用します。", "警告", MB_OK | MB_ICONWARNING);
             return g_pluginLoader->CreateSensor("DummyLightSensor", json::object());
         }
     }
     catch (const std::exception& e) {
-        std::string error =
-            std::string("センサーの初期化に失敗しました: ") + e.what() + "\n"
-            "一時的にダミーセンサーを使用します。";
+        std::string error = "センサーの初期化に失敗しました: " + std::string(e.what()) + " 一時的にダミーセンサーを使用します。";
         ShowErrorMessage(error, "エラー", MB_OK | MB_ICONWARNING);
         StringUtils::OutputMessage(error);
-
-        // エラー時はダミーセンサープラグインを使用
         return g_pluginLoader->CreateSensor("DummyLightSensor", json::object());
     }
 }
@@ -135,45 +118,32 @@ std::unique_ptr<ILightSensor> CreateLightSensor() {
 int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nCmdShow) {
     g_hInstance = hInstance;
 
-    // ウィンドウクラスの登録
-    WNDCLASSEX wc = {};
-    wc.cbSize = sizeof(WNDCLASSEX);
+    WNDCLASSEXW wc = {};
+    wc.cbSize = sizeof(WNDCLASSEXW);
     wc.lpfnWndProc = WindowProc;
     wc.hInstance = hInstance;
     wc.lpszClassName = L"BrightnessDaemonClass";
-    RegisterClassEx(&wc);
+    RegisterClassExW(&wc);
 
-    // ウィンドウの作成（非表示）
     InitializeWindow();
-
-    // タスクトレイアイコンの初期化
     InitializeTrayIcon();
-
-    // コンソールの初期化
     InitializeConsole();
 
-    // BrightnessManagerの初期化
     g_brightnessManager = std::make_unique<BrightnessManager>(CreateLightSensor());
 
-    // 設定の適用
     try {
         auto& config = ConfigManager::Instance();
         g_brightnessManager->SetUpdateInterval(std::chrono::milliseconds(config.GetUpdateInterval()));
         g_brightnessManager->SetBrightnessRange(config.GetMinBrightness(), config.GetMaxBrightness());
-        StringUtils::OutputMessage("設定を読み込みました: "
-            "更新間隔=" + std::to_string(config.GetUpdateInterval()) + "ms, "
-            "輝度範囲=" + std::to_string(config.GetMinBrightness()) + "-" +
-            std::to_string(config.GetMaxBrightness()) + "%");
+        StringUtils::OutputMessage("設定を読み込みました: 更新間隔=" + std::to_string(config.GetUpdateInterval()) + "ms, 輝度範囲=" + std::to_string(config.GetMinBrightness()) + "-" + std::to_string(config.GetMaxBrightness()) + "%");
     }
     catch (const ConfigException& e) {
-        ShowErrorMessage(std::string("設定の読み込みに失敗しました: ") + e.what() + "\n"
-            "デフォルト値を使用します。", "警告", MB_OK | MB_ICONWARNING);
+        std::string error = "設定の読み込みに失敗しました: " + std::string(e.what()) + " デフォルト値を使用します。";
+        ShowErrorMessage(error, "警告", MB_OK | MB_ICONWARNING);
     }
 
-    // 初期化完了のログ出力
     StringUtils::OutputMessage("BrightnessDaemon initialized successfully.");
 
-    // メッセージループ
     MSG msg = {};
     while (GetMessage(&msg, NULL, 0, 0)) {
         TranslateMessage(&msg);
@@ -218,11 +188,11 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
         return 0;
     }
 
-    return DefWindowProc(hwnd, uMsg, wParam, lParam);
+    return DefWindowProcW(hwnd, uMsg, wParam, lParam);
 }
 
 void InitializeWindow() {
-    g_hwnd = CreateWindowEx(
+    g_hwnd = CreateWindowExW(
         0,
         L"BrightnessDaemonClass",
         L"BrightnessDaemon",
@@ -242,15 +212,15 @@ void InitializeWindow() {
 
 void InitializeTrayIcon() {
     g_nid = {};
-    g_nid.cbSize = sizeof(NOTIFYICONDATA);
+    g_nid.cbSize = sizeof(NOTIFYICONDATAW);
     g_nid.hWnd = g_hwnd;
     g_nid.uID = ID_TRAYICON;
     g_nid.uFlags = NIF_ICON | NIF_MESSAGE | NIF_TIP;
     g_nid.uCallbackMessage = WM_APP_NOTIFY;
-    g_nid.hIcon = LoadIcon(NULL, IDI_APPLICATION); // デフォルトアイコンを使用
-    wcscpy_s(g_nid.szTip, L"BrightnessDaemon");
+    g_nid.hIcon = LoadIcon(NULL, IDI_APPLICATION);
+    wcscpy_s(g_nid.szTip, sizeof(g_nid.szTip) / sizeof(WCHAR), L"BrightnessDaemon");
 
-    if (!Shell_NotifyIcon(NIM_ADD, &g_nid)) {
+    if (!Shell_NotifyIconW(NIM_ADD, &g_nid)) {
         ShowErrorMessage("タスクトレイアイコンの作成に失敗しました");
         exit(1);
     }
@@ -259,16 +229,16 @@ void InitializeTrayIcon() {
 void ShowContextMenu(HWND hwnd, POINT pt) {
     HMENU hMenu = CreatePopupMenu();
     if (hMenu) {
-        InsertMenu(hMenu, -1, MF_BYPOSITION | MF_STRING, ID_MENU_TOGGLE,
-                   g_isSyncEnabled ? L"同期を停止" : L"同期を開始");
-        InsertMenu(hMenu, -1, MF_BYPOSITION | MF_STRING, ID_MENU_TOGGLE_CONSOLE,
-                   g_isConsoleVisible ? L"コンソールを隠す" : L"コンソールを表示");
-        InsertMenu(hMenu, -1, MF_BYPOSITION | MF_STRING, ID_MENU_EXIT, L"終了");
+        std::wstring syncText = g_isSyncEnabled ? L"同期を停止" : L"同期を開始";
+        std::wstring consoleText = g_isConsoleVisible ? L"コンソールを隠す" : L"コンソールを表示";
+        std::wstring exitText = L"終了";
 
-        // メニューの表示
+        InsertMenuW(hMenu, -1, MF_BYPOSITION | MF_STRING, ID_MENU_TOGGLE, syncText.c_str());
+        InsertMenuW(hMenu, -1, MF_BYPOSITION | MF_STRING, ID_MENU_TOGGLE_CONSOLE, consoleText.c_str());
+        InsertMenuW(hMenu, -1, MF_BYPOSITION | MF_STRING, ID_MENU_EXIT, exitText.c_str());
+
         SetForegroundWindow(hwnd);
-        TrackPopupMenu(hMenu, TPM_BOTTOMALIGN | TPM_LEFTALIGN,
-                       pt.x, pt.y, 0, hwnd, NULL);
+        TrackPopupMenu(hMenu, TPM_BOTTOMALIGN | TPM_LEFTALIGN, pt.x, pt.y, 0, hwnd, NULL);
         DestroyMenu(hMenu);
     }
 }
@@ -285,18 +255,14 @@ void ToggleSync() {
 }
 
 void Cleanup() {
-    // タスクトレイアイコンの削除
-    Shell_NotifyIcon(NIM_DELETE, &g_nid);
+    Shell_NotifyIconW(NIM_DELETE, &g_nid);
 
-    // BrightnessManagerの停止
     if (g_brightnessManager) {
         g_brightnessManager->StopSync();
     }
 
-    // プラグインローダーのクリーンアップ
     g_pluginLoader.reset();
 
-    // コンソールのクリーンアップ
     if (g_consoleHook) {
         UnhookWindowsHookEx(g_consoleHook);
         g_consoleHook = nullptr;

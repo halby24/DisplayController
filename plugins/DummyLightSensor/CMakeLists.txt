@@ -7,9 +7,11 @@ add_library(DummyLightSensor SHARED
     src/DummyPlugin.cpp
 )
 
-# プラグインのエクスポートマクロを定義
+# プラグインのエクスポートマクロとUnicodeサポートを定義
 target_compile_definitions(DummyLightSensor PRIVATE
     PLUGIN_EXPORTS
+    _UNICODE
+    UNICODE
 )
 
 # インクルードディレクトリの設定
@@ -26,8 +28,13 @@ target_link_libraries(DummyLightSensor PRIVATE
     nlohmann_json::nlohmann_json
 )
 
-# C++17を使用
-target_compile_features(DummyLightSensor PRIVATE cxx_std_17)
+# C++20を使用
+target_compile_features(DummyLightSensor PRIVATE cxx_std_20)
+
+# Windows環境でのコンパイラオプション設定
+if(MSVC)
+    target_compile_options(DummyLightSensor PRIVATE /utf-8 /W4)
+endif()
 
 # インストール設定
 install(TARGETS DummyLightSensor

@@ -7,9 +7,15 @@ endif()
 cmake_minimum_required(VERSION 3.15)
 project(DisplayController VERSION 1.0.0)
 
-# C++17を使用
-set(CMAKE_CXX_STANDARD 17)
+# C++20を使用
+set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
+# Windows環境でのUTF-8強制とその他のコンパイラオプション
+if(MSVC)
+    add_compile_options(/utf-8 /W4)
+    add_compile_definitions(_UNICODE UNICODE)
+endif()
 
 # vcpkgの依存関係
 find_package(CURL CONFIG REQUIRED)
