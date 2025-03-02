@@ -1,6 +1,11 @@
 cmake_minimum_required(VERSION 3.15)
 project(DummyLightSensor VERSION 1.0.0)
 
+# プロジェクトルートでの直接ビルドを防止
+if(CMAKE_BINARY_DIR STREQUAL CMAKE_SOURCE_DIR)
+    message(FATAL_ERROR "プロジェクトルート内での直接ビルドは禁止されています。別のビルドディレクトリを使用してください。例: mkdir -p build && cd build && cmake ..")
+endif()
+
 # プラグインのビルド設定
 add_library(DummyLightSensor SHARED
     src/DummyLightSensor.cpp

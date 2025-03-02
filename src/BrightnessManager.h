@@ -1,6 +1,12 @@
 #ifndef DISPLAYCONTROLLER_BRIGHTNESSMANAGER_H
 #define DISPLAYCONTROLLER_BRIGHTNESSMANAGER_H
 
+#ifdef DISPLAYCONTROLLERLIB_EXPORTS
+#define DISPLAYCONTROLLERLIB_API __declspec(dllexport)
+#else
+#define DISPLAYCONTROLLERLIB_API __declspec(dllimport)
+#endif
+
 #include "ILightSensor.h"
 #include "MonitorController.h"
 #include <memory>
@@ -8,7 +14,7 @@
 #include <atomic>
 #include <chrono>
 
-class BrightnessManager {
+class DISPLAYCONTROLLERLIB_API BrightnessManager {
 public:
     explicit BrightnessManager(std::unique_ptr<ILightSensor> sensor);
     ~BrightnessManager();

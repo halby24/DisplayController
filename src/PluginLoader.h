@@ -1,6 +1,12 @@
 #ifndef DISPLAYCONTROLLER_PLUGINLOADER_H
 #define DISPLAYCONTROLLER_PLUGINLOADER_H
 
+#ifdef DISPLAYCONTROLLERLIB_EXPORTS
+#define DISPLAYCONTROLLERLIB_API __declspec(dllexport)
+#else
+#define DISPLAYCONTROLLERLIB_API __declspec(dllimport)
+#endif
+
 #include <memory>
 #include <string>
 #include <vector>
@@ -17,7 +23,7 @@ using json = nlohmann::json;
  * このクラスは照度センサープラグインの動的ロードと管理を担当します。
  * プラグインの読み込み、インスタンス化、破棄を管理します。
  */
-class PluginLoader {
+class DISPLAYCONTROLLERLIB_API PluginLoader {
 public:
     PluginLoader();
     ~PluginLoader();

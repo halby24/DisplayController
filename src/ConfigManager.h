@@ -1,13 +1,19 @@
 #ifndef DISPLAYCONTROLLER_CONFIG_MANAGER_H
 #define DISPLAYCONTROLLER_CONFIG_MANAGER_H
 
+#ifdef DISPLAYCONTROLLERLIB_EXPORTS
+#define DISPLAYCONTROLLERLIB_API __declspec(dllexport)
+#else
+#define DISPLAYCONTROLLERLIB_API __declspec(dllimport)
+#endif
+
 #include <string>
 #include <memory>
 #include <nlohmann/json.hpp>
 #include <common/StringUtils.h>
 
 // キャリブレーション設定を管理する構造体
-struct CalibrationSettings {
+struct DISPLAYCONTROLLERLIB_API CalibrationSettings {
     int minRawValue = 0;      // デフォルト値
     int maxRawValue = 1000;   // デフォルト値
 
@@ -16,7 +22,7 @@ struct CalibrationSettings {
     }
 };
 
-class ConfigManager {
+class DISPLAYCONTROLLERLIB_API ConfigManager {
 public:
     static ConfigManager& Instance();
 

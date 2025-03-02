@@ -4,14 +4,7 @@
 #include <string>
 #include <windows.h>
 
-// 共通ライブラリのエクスポート設定
-#ifdef COMMON_LIB_EXPORTS
-    #define COMMON_API __declspec(dllexport)
-#else
-    #define COMMON_API __declspec(dllimport)
-#endif
-
-class COMMON_API StringUtils {
+class StringUtils {
 public:
     // ワイド文字列からUTF-8文字列への変換
     static std::string WideToUtf8(const std::wstring& wide);
