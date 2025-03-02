@@ -43,7 +43,7 @@ if(MSVC)
 endif()
 
 # ビルド時のプラグインディレクトリ設定
-set(RUNTIME_PLUGINS_DIR "${CMAKE_BINARY_DIR}/bin/$<CONFIG>/plugins")
+set(RUNTIME_PLUGINS_DIR "${CMAKE_BINARY_DIR}/$<CONFIG>/plugins")
 
 # プラグインディレクトリを作成
 add_custom_command(
