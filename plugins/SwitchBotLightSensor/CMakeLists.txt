@@ -30,6 +30,8 @@ target_include_directories(SwitchBotLightSensor PRIVATE
 # DLLエクスポートマクロを定義
 target_compile_definitions(SwitchBotLightSensor PRIVATE
     SWITCHBOT_EXPORTS
+    LIGHTSENSOR_EXPORTS
+    PLUGIN_EXPORTS
     _UNICODE
     UNICODE
 )
@@ -46,6 +48,7 @@ target_link_libraries(SwitchBotLightSensor PRIVATE
     OpenSSL::SSL
     OpenSSL::Crypto
     DisplayControllerCommon
+    DisplayControllerLib
 )
 
 # C++20を使用

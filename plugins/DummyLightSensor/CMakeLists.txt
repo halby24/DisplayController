@@ -15,6 +15,7 @@ add_library(DummyLightSensor SHARED
 # プラグインのエクスポートマクロとUnicodeサポートを定義
 target_compile_definitions(DummyLightSensor PRIVATE
     PLUGIN_EXPORTS
+    LIGHTSENSOR_EXPORTS
     _UNICODE
     UNICODE
 )

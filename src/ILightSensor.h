@@ -1,7 +1,18 @@
 #ifndef DISPLAYCONTROLLER_ILIGHTSENSOR_H
 #define DISPLAYCONTROLLER_ILIGHTSENSOR_H
 
-class ILightSensor {
+// DLLエクスポート/インポートマクロ
+#ifdef _WIN32
+    #ifdef LIGHTSENSOR_EXPORTS
+        #define LIGHTSENSOR_API __declspec(dllexport)
+    #else
+        #define LIGHTSENSOR_API __declspec(dllimport)
+    #endif
+#else
+    #define LIGHTSENSOR_API
+#endif
+
+class LIGHTSENSOR_API ILightSensor {
 public:
     virtual ~ILightSensor() = default;
 

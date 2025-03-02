@@ -56,7 +56,7 @@ SwitchBotLightSensor::SwitchBotLightSensor(
         }
 
         // HTTPクライアントを初期化
-        m_httpClient = std::make_unique<HttpClient>(token, m_retryCount, m_retryInterval);
+        m_httpClient = std::make_unique<HttpClient>(token, m_config.GetSwitchBotSecret());
         std::cout << "[SwitchBot] HTTP client initialized successfully" << std::endl;
     }
     catch (const ConfigException& e) {
