@@ -53,7 +53,8 @@ if(MSVC)
 endif()
 
 # ビルド時のプラグインディレクトリ設定
-set(RUNTIME_PLUGINS_DIR "${CMAKE_BINARY_DIR}/$<CONFIG>/plugins")
+set(RUNTIME_DIR "${CMAKE_BINARY_DIR}/$<CONFIG>")
+set(RUNTIME_PLUGINS_DIR "${RUNTIME_DIR}/plugins")
 
 # プラグインディレクトリを作成
 add_custom_command(
@@ -65,8 +66,17 @@ add_custom_command(
 add_custom_command(
     TARGET SwitchBotLightSensor POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_if_different
-        "$<TARGET_FILE:SwitchBotLightSensor>"
-        "${RUNTIME_PLUGINS_DIR}"
+    "$<TARGET_FILE:SwitchBotLightSensor>"
+    "${RUNTIME_PLUGINS_DIR}"
+)
+
+add_custom_command(
+    TARGET SwitchBotLightSensor POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+    "$<TARGET_FILE_DIR:SwitchBotLightSensor>/libcurl-d.dll"
+    "$<TARGET_FILE_DIR:SwitchBotLightSensor>/libcrypto-3-x64.dll"
+    "$<TARGET_FILE_DIR:SwitchBotLightSensor>/zlibd1.dll"
+    "${RUNTIME_DIR}"
 )
 
 # インストール設定

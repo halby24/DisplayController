@@ -3,6 +3,7 @@
 #include <filesystem>
 #include <stdexcept>
 #include <sstream>
+#include <StringUtils.h>
 
 namespace fs = std::filesystem;
 
@@ -31,7 +32,7 @@ size_t PluginLoader::LoadPlugins(const std::string& pluginDir) {
                     std::ostringstream oss;
                     oss << "Failed to load plugin " << entry.path().string()
                         << ": " << e.what() << "\n";
-                    OutputDebugStringA(oss.str().c_str());
+                    StringUtils::OutputErrorMessage(oss.str().c_str());
                 }
             }
         }
@@ -49,8 +50,28 @@ void PluginLoader::LoadPlugin(const std::string& pluginPath) {
     // DLLをロード
     HMODULE handle = LoadLibraryA(pluginPath.c_str());
     if (!handle) {
+        DWORD error = GetLastError();
+        LPWSTR messageBuffer = nullptr;
+        size_t size = FormatMessageW(
+            FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
+            NULL,
+            error,
+            MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
+            (LPWSTR)&messageBuffer,
+            0,
+            NULL
+        );
+
         std::ostringstream oss;
-        oss << "Failed to load plugin DLL: " << pluginPath;
+        oss << "Failed to load plugin DLL: " << pluginPath << "\n";
+        if (size > 0) {
+            std::string utf8Message = StringUtils::WideToUtf8(messageBuffer);
+            oss << "Error: " << utf8Message << "\n";
+            GlobalFree(messageBuffer);
+        }
+        else {
+            oss << "Error code: " << error << "\n";
+        }
         throw std::runtime_error(oss.str());
     }
 
@@ -76,10 +97,10 @@ void PluginLoader::LoadPlugin(const std::string& pluginPath) {
     }
 
     // プラグイン情報を保存
-    PluginInfo info{
-        .handle = handle,
-        .plugin = plugin,
-        .path = pluginPath
+    PluginInfo info = {
+        handle,
+        plugin,
+        pluginPath
     };
 
     const char* pluginName = plugin->GetPluginName();

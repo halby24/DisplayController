@@ -119,6 +119,8 @@ add_custom_command(
         "${RUNTIME_PLUGINS_DIR}"
 )
 
+set(VCPKG_APPLOCAL_DEPS ON)
+
 # インストール設定
 install(TARGETS
     DisplayControllerLib

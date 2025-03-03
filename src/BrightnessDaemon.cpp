@@ -100,7 +100,8 @@ std::unique_ptr<ILightSensor> CreateLightSensor() {
 
         if (config.HasDeviceType("Light Sensor")) {
             auto device = config.GetFirstDeviceByType("Light Sensor");
-            const std::string& pluginName = device["plugin"].get<std::string>();
+            const std::string& deviceName = device["name"].get<std::string>();
+            const std::string& pluginName = config.GetPluginConfig(device["pluginName"].get<std::string>(), "name", deviceName);
             StringUtils::OutputMessage("Light Sensorプラグインを使用: " + pluginName);
             return g_pluginLoader->CreateSensor(pluginName, device);
         }
