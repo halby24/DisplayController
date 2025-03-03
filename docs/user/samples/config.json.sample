@@ -1,18 +1,31 @@
 {
+  "monitors": {
+    "Display1": {
+      "min_brightness": 0,
+      "max_brightness": 100
+    },
+    "Display2": {
+      "min_brightness": 20,
+      "max_brightness": 90
+    }
+  },
   "plugins": {
     "DummyLightSensor": {
       "devices": [
         {
           "id": "dummy-1",
           "name": "Dummy Sensor 1",
-          "type": "Light Sensor"
+          "type": "Light Sensor",
+          "description": "テスト用のダミーセンサー"
         }
       ]
     },
     "SwitchBotLightSensor": {
       "global_settings": {
         "token": "YOUR_SWITCHBOT_API_TOKEN",
-        "secret": "YOUR_SWITCHBOT_API_SECRET"
+        "secret": "YOUR_SWITCHBOT_API_SECRET",
+        "retry_count": 3,
+        "retry_interval": 1000
       },
       "devices": [
         {
