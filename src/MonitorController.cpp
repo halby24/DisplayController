@@ -325,6 +325,16 @@ BOOL CALLBACK MonitorController::MonitorEnumProc(HMONITOR hMonitor, HDC hdcMonit
     info.bounds = monitorInfo.rcMonitor;
     info.id = hMonitor;
 
+    // 物理サイズを取得
+    HDC hdc = ::CreateDCW(L"DISPLAY", monitorInfo.szDevice, nullptr, nullptr);
+    if (hdc) {
+        info.physicalSize.cx = ::GetDeviceCaps(hdc, HORZSIZE);  // 物理的な幅 (mm)
+        info.physicalSize.cy = ::GetDeviceCaps(hdc, VERTSIZE);  // 物理的な高さ (mm)
+        ::DeleteDC(hdc);
+    } else {
+        info.physicalSize = {0, 0};
+    }
+
     monitors->push_back(info);
     return TRUE;
 }
@@ -401,14 +411,145 @@ MonitorController::MonitorCapabilities MonitorController::GetMonitorCapabilities
     return caps;
 }
 
+bool MonitorController::GetMonitorEDID(const std::wstring& deviceName, std::vector<BYTE>& edidData)
+{
+    HDEVINFO deviceInfo = SetupDiGetClassDevsW(&GUID_DEVCLASS_MONITOR, nullptr, nullptr, DIGCF_PRESENT);
+    if (deviceInfo == INVALID_HANDLE_VALUE) {
+        return false;
+    }
+
+    std::unique_ptr<void, decltype(&SetupDiDestroyDeviceInfoList)> deviceInfoGuard(
+        deviceInfo, SetupDiDestroyDeviceInfoList);
+
+    SP_DEVINFO_DATA deviceInfoData = { sizeof(SP_DEVINFO_DATA) };
+    for (DWORD i = 0; SetupDiEnumDeviceInfo(deviceInfo, i, &deviceInfoData); i++) {
+        DWORD propertyType;
+        BYTE buffer[2048];
+        DWORD size = sizeof(buffer);
+
+        if (SetupDiGetDeviceRegistryPropertyW(deviceInfo, &deviceInfoData, SPDRP_HARDWAREID,
+            &propertyType, buffer, size, &size)) {
+            std::wstring hardwareId = reinterpret_cast<wchar_t*>(buffer);
+            if (hardwareId.find(deviceName) != std::wstring::npos) {
+                // EDIDデータを取得
+                if (SetupDiGetDeviceRegistryPropertyW(deviceInfo, &deviceInfoData, SPDRP_PHYSICAL_DEVICE_OBJECT_NAME,
+                    &propertyType, buffer, size, &size)) {
+                    edidData.assign(buffer, buffer + size);
+                    return true;
+                }
+            }
+        }
+    }
+    return false;
+}
+
+bool MonitorController::ParseEDIDManufacturerInfo(const std::vector<BYTE>& edidData,
+    std::wstring& manufacturer, std::wstring& productCode)
+{
+    if (edidData.size() < 128) {
+        return false;
+    }
+
+    // 製造元IDを解析（3文字のASCIIコード）
+    unsigned short manufacturerId = (edidData[8] << 8) | edidData[9];
+    wchar_t manufacturerCode[4] = {
+        static_cast<wchar_t>((manufacturerId >> 10 & 0x1F) + 'A' - 1),
+        static_cast<wchar_t>((manufacturerId >> 5 & 0x1F) + 'A' - 1),
+        static_cast<wchar_t>((manufacturerId & 0x1F) + 'A' - 1),
+        L'\0'
+    };
+    manufacturer = manufacturerCode;
+
+    // 製品コードを16進数で取得
+    unsigned short productCodeValue = (edidData[11] << 8) | edidData[10];
+    std::wstringstream ss;
+    ss << std::hex << std::uppercase << std::setfill(L'0') << std::setw(4) << productCodeValue;
+    productCode = ss.str();
+
+    return true;
+}
+
+std::wstring MonitorController::ConvertSizeToInches(const SIZE& sizeInMm)
+{
+    // 対角線の長さをインチに変換
+    double diagonalMm = std::sqrt(
+        static_cast<double>(sizeInMm.cx) * sizeInMm.cx +
+        static_cast<double>(sizeInMm.cy) * sizeInMm.cy
+    );
+    double diagonalInches = diagonalMm / 25.4; // mmからインチへの変換
+
+    // 整数に丸める
+    int inches = static_cast<int>(std::round(diagonalInches));
+    return std::to_wstring(inches) + L"inch";
+}
+
+std::wstring MonitorController::GetMonitorRoleInfo(const MonitorInfo& info)
+{
+    std::wstring role;
+    if (info.isPrimary) {
+        role = L"Primary";
+    }
+    return role;
+}
+
+std::wstring MonitorController::GenerateHumanReadableName(const MonitorInfo& info)
+{
+    std::wstringstream nameStream;
+
+    // 製造元名とモデル名を追加
+    if (info.manufacturerName != L"Unknown") {
+        nameStream << info.manufacturerName;
+        if (info.productCode != L"Unknown") {
+            nameStream << L" " << info.productCode;
+        }
+    } else {
+        nameStream << L"Display " << std::to_wstring(m_nameCounters[L"Generic"]++);
+    }
+
+    // サイズ情報を追加
+    if (info.physicalSize.cx > 0 && info.physicalSize.cy > 0) {
+        nameStream << L" " << ConvertSizeToInches(info.physicalSize);
+    }
+
+    // 役割情報を追加
+    std::wstring role = GetMonitorRoleInfo(info);
+    if (!role.empty()) {
+        nameStream << L" " << role;
+    }
+
+    // 重複チェックと番号付加
+    std::wstring baseName = nameStream.str();
+    std::wstring finalName = baseName;
+    int counter = 2;
+    while (m_nameCounters[finalName] > 0) {
+        finalName = baseName + L" (" + std::to_wstring(counter++) + L")";
+    }
+    m_nameCounters[finalName]++;
+
+    return finalName;
+}
+
 void MonitorController::GetDetailedMonitorInfo(MonitorInfo& info)
 {
-    // 詳細情報の取得は必要に応じて実装
-    // 基本的な情報のみを設定
-    info.manufacturerName = L"Unknown";
-    info.productCode = L"Unknown";
+    // 物理サイズを取得
+    auto caps = GetMonitorCapabilities(info.id);
+    info.physicalSize = caps.displaySize;
+
+    // EDID情報を取得
+    std::vector<BYTE> edidData;
+    if (GetMonitorEDID(info.deviceName, edidData)) {
+        ParseEDIDManufacturerInfo(edidData, info.manufacturerName, info.productCode);
+    } else {
+        info.manufacturerName = L"Unknown";
+        info.productCode = L"Unknown";
+    }
+
+    // シリアル番号は現時点では未実装
     info.serialNumber = L"Unknown";
-    info.friendlyName = L"Unknown Monitor";
+
+    // フレンドリーネームを生成
+    info.friendlyName = GenerateHumanReadableName(info);
+    info.humanReadableName = info.friendlyName;
 }
 
 std::wstring MonitorController::GetSettingsFilePath(const MonitorInfo& info) const

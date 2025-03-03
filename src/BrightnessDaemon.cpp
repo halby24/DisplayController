@@ -48,6 +48,39 @@ void ToggleConsoleWindow();
 void Cleanup();
 std::unique_ptr<ILightSensor> CreateLightSensor();
 
+// モニター設定の自動追加
+void CheckAndAddMonitorConfigs() {
+    try {
+        auto& config = ConfigManager::Instance();
+        auto monitors = g_brightnessManager->GetMonitorController().GetMonitors();
+
+        for (const auto& monitor : monitors) {
+            // モニターの詳細情報を取得
+            MonitorController::MonitorInfo info = monitor;
+            g_brightnessManager->GetMonitorController().GetDetailedMonitorInfo(info);
+
+            // 設定が存在しない場合は追加
+            if (!config.HasMonitor(StringUtils::WideToUtf8(info.humanReadableName))) {
+                StringUtils::OutputMessage("新しいモニターを検出: " + StringUtils::WideToUtf8(info.humanReadableName));
+
+                // デフォルトの輝度範囲設定を作成
+                MonitorBrightnessRange range;
+                range.min = 0;
+                range.max = 100;
+
+                // 設定を追加
+                config.AddMonitor(StringUtils::WideToUtf8(info.humanReadableName), range);
+                StringUtils::OutputMessage("モニター設定を追加しました: " + StringUtils::WideToUtf8(info.humanReadableName));
+            }
+        }
+    }
+    catch (const std::exception& e) {
+        std::string error = "モニター設定の自動追加に失敗しました: " + std::string(e.what());
+        ShowErrorMessage(error, "警告", MB_OK | MB_ICONWARNING);
+        StringUtils::OutputMessage(error);
+    }
+}
+
 // コンソール管理
 void InitializeConsole() {
     if (!AllocConsole()) {
@@ -157,13 +190,34 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 
     try {
         auto& config = ConfigManager::Instance();
+
+        // 設定のバックアップを作成
+        config.CreateBackup();
+        StringUtils::OutputMessage("設定ファイルのバックアップを作成しました");
+
+        // モニター設定の自動追加
+        CheckAndAddMonitorConfigs();
+
+        // 基本設定の適用
         g_brightnessManager->SetUpdateInterval(std::chrono::milliseconds(config.GetUpdateInterval()));
         g_brightnessManager->SetBrightnessRange(config.GetMinBrightness(), config.GetMaxBrightness());
         StringUtils::OutputMessage("設定を読み込みました: 更新間隔=" + std::to_string(config.GetUpdateInterval()) + "ms, 輝度範囲=" + std::to_string(config.GetMinBrightness()) + "-" + std::to_string(config.GetMaxBrightness()) + "%");
     }
     catch (const ConfigException& e) {
-        std::string error = "設定の読み込みに失敗しました: " + std::string(e.what()) + " デフォルト値を使用します。";
+        std::string error = "設定の読み込みに失敗しました: " + std::string(e.what());
         ShowErrorMessage(error, "警告", MB_OK | MB_ICONWARNING);
+
+        try {
+            // 設定の復元を試みる
+            auto& config = ConfigManager::Instance();
+            config.RestoreFromBackup();
+            StringUtils::OutputMessage("バックアップから設定を復元しました");
+        }
+        catch (const std::exception& e) {
+            std::string error = "バックアップからの復元に失敗しました: " + std::string(e.what()) + " デフォルト値を使用します。";
+            ShowErrorMessage(error, "警告", MB_OK | MB_ICONWARNING);
+            StringUtils::OutputMessage(error);
+        }
     }
 
     StringUtils::OutputMessage("BrightnessDaemon initialized successfully.");

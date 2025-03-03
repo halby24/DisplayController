@@ -18,7 +18,13 @@
 #include <filesystem>
 #include <memory>
 #include <map>
+#include <sstream>
+#include <iomanip>
+#include <setupapi.h>
+#include <devguid.h>
 #include <nlohmann/json.hpp>
+
+#pragma comment(lib, "Setupapi.lib")
 
 // 例外クラス
 class DISPLAYCONTROLLER_API DisplayControllerException : public std::runtime_error {
@@ -85,6 +91,12 @@ public:
         std::wstring productCode;
         std::wstring serialNumber;
         std::wstring friendlyName;
+
+        // 物理サイズ（mm）
+        SIZE physicalSize;
+
+        // 人間が識別可能な名前（例：DELL P2419H 24inch Primary）
+        std::wstring humanReadableName;
     };
 
     // モニター設定
@@ -131,16 +143,29 @@ public:
 private:
     static BOOL CALLBACK MonitorEnumProc(HMONITOR hMonitor, HDC hdcMonitor, LPRECT lprcMonitor, LPARAM dwData);
     HANDLE GetPhysicalMonitorHandle(MonitorId id);
+    // モニター情報取得用のヘルパー関数
     std::wstring GetSettingsFilePath(const MonitorInfo& info) const;
     std::wstring GetMappingConfigFilePath(MonitorId id) const;
     void SaveMappingConfig(MonitorId id, const MappingConfig& config);
     void LoadMappingConfigs();
+
+    // EDID情報取得用のヘルパー関数
+    bool GetMonitorEDID(const std::wstring& deviceName, std::vector<BYTE>& edidData);
+    bool ParseEDIDManufacturerInfo(const std::vector<BYTE>& edidData, std::wstring& manufacturer, std::wstring& productCode);
+
+    // 人間が識別可能な名前の生成
+    std::wstring GenerateHumanReadableName(const MonitorInfo& info);
+    std::wstring ConvertSizeToInches(const SIZE& sizeInMm);
+    std::wstring GetMonitorRoleInfo(const MonitorInfo& info);
 
     // 設定ファイルのベースディレクトリ
     std::filesystem::path m_settingsPath;
 
     // モニターごとのマッピング設定
     std::map<MonitorId, MappingConfig> m_mappingConfigs;
+
+    // 重複名の処理用のカウンター
+    std::map<std::wstring, int> m_nameCounters;
 };
 
 #endif // DISPLAYCONTROLLER_MONITOR_CONTROLLER_H

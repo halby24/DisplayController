@@ -48,9 +48,199 @@ void ConfigManager::EnsureConfigDirectoryExists() const
 void ConfigManager::CreateDefaultConfig()
 {
     m_config = nlohmann::json{
+        {"monitors", nlohmann::json::array()},
         {"plugins", {{"DummyLightSensor", {{"devices", nlohmann::json::array({{"id", ""}, {"name", "Dummy Sensor 1"}, {"type", "Light Sensor"}})}}}, {"SwitchBotLightSensor", {{"global_settings", {{"token", ""}, {"secret", ""}}}, {"devices", nlohmann::json::array({{"id", ""}, {"name", "SwitchBot Sensor 1"}, {"type", "Light Sensor"}})}}}}},
         {"brightness_daemon", {{"update_interval_ms", 5000}, {"min_brightness", 0}, {"max_brightness", 100}}}};
     Save();
+}
+
+std::vector<std::string> ConfigManager::GetMonitorNames() const
+{
+    if (!m_isLoaded)
+    {
+        throw ConfigException("設定が読み込まれていません");
+    }
+
+    std::vector<std::string> names;
+    if (m_config.contains("monitors"))
+    {
+        const auto &monitors = m_config["monitors"];
+        for (const auto &monitor : monitors)
+        {
+            if (monitor.contains("name"))
+            {
+                names.push_back(monitor["name"].get<std::string>());
+            }
+        }
+    }
+    return names;
+}
+
+bool ConfigManager::HasMonitor(const std::string &name) const
+{
+    if (!m_isLoaded)
+    {
+        return false;
+    }
+
+    if (m_config.contains("monitors"))
+    {
+        const auto &monitors = m_config["monitors"];
+        for (const auto &monitor : monitors)
+        {
+            if (monitor.contains("name") && monitor["name"] == name)
+            {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
+MonitorBrightnessRange ConfigManager::GetMonitorBrightnessRange(const std::string &name) const
+{
+    if (!m_isLoaded)
+    {
+        throw ConfigException("設定が読み込まれていません");
+    }
+
+    if (!m_config.contains("monitors"))
+    {
+        throw ConfigException("monitorsセクションが見つかりません");
+    }
+
+    const auto &monitors = m_config["monitors"];
+    for (const auto &monitor : monitors)
+    {
+        if (monitor["name"] == name)
+        {
+            if (!monitor.contains("brightness_range"))
+            {
+                throw ConfigException("モニター " + name + " の brightness_range が設定されていません");
+            }
+
+            const auto &range = monitor["brightness_range"];
+            MonitorBrightnessRange result;
+
+            try
+            {
+                result.min = range["min"].get<int>();
+                result.max = range["max"].get<int>();
+
+                if (!result.IsValid())
+                {
+                    throw ConfigException("不正な輝度範囲です: min=" + std::to_string(result.min) + ", max=" + std::to_string(result.max));
+                }
+
+                return result;
+            }
+            catch (const nlohmann::json::exception &e)
+            {
+                throw ConfigException("輝度範囲の値が不正です: " + std::string(e.what()));
+            }
+        }
+    }
+
+    throw ConfigException("モニターが見つかりません: " + name);
+}
+
+void ConfigManager::SetMonitorBrightnessRange(const std::string &name, const MonitorBrightnessRange &range)
+{
+    if (!m_isLoaded)
+    {
+        throw ConfigException("設定が読み込まれていません");
+    }
+
+    if (!range.IsValid())
+    {
+        throw ConfigException("不正な輝度範囲です: min=" + std::to_string(range.min) + ", max=" + std::to_string(range.max));
+    }
+
+    if (!m_config.contains("monitors"))
+    {
+        m_config["monitors"] = nlohmann::json::array();
+    }
+
+    auto &monitors = m_config["monitors"];
+    for (auto &monitor : monitors)
+    {
+        if (monitor["name"] == name)
+        {
+            monitor["brightness_range"] = {
+                {"min", range.min},
+                {"max", range.max}
+            };
+            Save();
+            return;
+        }
+    }
+
+    throw ConfigException("モニターが見つかりません: " + name);
+}
+
+void ConfigManager::AddMonitor(const std::string &name, const MonitorBrightnessRange &range)
+{
+    if (!m_isLoaded)
+    {
+        throw ConfigException("設定が読み込まれていません");
+    }
+
+    if (name.empty())
+    {
+        throw ConfigException("モニター名を指定してください");
+    }
+
+    if (!range.IsValid())
+    {
+        throw ConfigException("不正な輝度範囲です: min=" + std::to_string(range.min) + ", max=" + std::to_string(range.max));
+    }
+
+    if (HasMonitor(name))
+    {
+        throw ConfigException("同じ名前のモニターが既に存在します: " + name);
+    }
+
+    if (!m_config.contains("monitors"))
+    {
+        m_config["monitors"] = nlohmann::json::array();
+    }
+
+    nlohmann::json monitor = {
+        {"name", name},
+        {"brightness_range", {
+            {"min", range.min},
+            {"max", range.max}
+        }}
+    };
+
+    m_config["monitors"].push_back(monitor);
+    Save();
+}
+
+void ConfigManager::RemoveMonitor(const std::string &name)
+{
+    if (!m_isLoaded)
+    {
+        throw ConfigException("設定が読み込まれていません");
+    }
+
+    if (!m_config.contains("monitors"))
+    {
+        throw ConfigException("monitorsセクションが見つかりません");
+    }
+
+    auto &monitors = m_config["monitors"];
+    for (auto it = monitors.begin(); it != monitors.end(); ++it)
+    {
+        if ((*it)["name"] == name)
+        {
+            monitors.erase(it);
+            Save();
+            return;
+        }
+    }
+
+    throw ConfigException("モニターが見つかりません: " + name);
 }
 
 CalibrationSettings ConfigManager::GetDeviceCalibration(const std::string &deviceId) const
@@ -309,6 +499,79 @@ ConfigValidationResult ConfigManager::ValidateArray(const nlohmann::json &value,
 
 void ConfigManager::ValidateConfig() const
 {
+    // monitorsセクションの検証（オプショナル）
+    if (m_config.contains("monitors"))
+    {
+        auto result = ValidateArray(m_config["monitors"], "monitors");
+        if (!result.isValid)
+            throw ConfigException(result);
+
+        const auto &monitors = m_config["monitors"];
+        for (size_t i = 0; i < monitors.size(); ++i)
+        {
+            const auto &monitor = monitors[i];
+            std::string monitorPath = "monitors[" + std::to_string(i) + "]";
+
+            // nameフィールドの検証
+            if (!monitor.contains("name"))
+            {
+                throw ConfigException(ConfigValidationResult{
+                    false, monitorPath + ".name", "string", "undefined", "",
+                    "モニター名が指定されていません"});
+            }
+            auto nameResult = ValidateString(monitor["name"], monitorPath + ".name");
+            if (!nameResult.isValid)
+                throw ConfigException(nameResult);
+
+            // brightness_rangeの検証
+            if (!monitor.contains("brightness_range"))
+            {
+                throw ConfigException(ConfigValidationResult{
+                    false, monitorPath + ".brightness_range", "object", "undefined", "",
+                    "brightness_rangeが指定されていません"});
+            }
+            auto rangeResult = ValidateObject(monitor["brightness_range"], monitorPath + ".brightness_range");
+            if (!rangeResult.isValid)
+                throw ConfigException(rangeResult);
+
+            const auto &range = monitor["brightness_range"];
+            std::string rangePath = monitorPath + ".brightness_range";
+
+            // minの検証
+            if (!range.contains("min"))
+            {
+                throw ConfigException(ConfigValidationResult{
+                    false, rangePath + ".min", "number", "undefined", "",
+                    "最小輝度が指定されていません"});
+            }
+            auto minResult = ValidateNumber(range["min"], rangePath + ".min", 0, 100);
+            if (!minResult.isValid)
+                throw ConfigException(minResult);
+
+            // maxの検証
+            if (!range.contains("max"))
+            {
+                throw ConfigException(ConfigValidationResult{
+                    false, rangePath + ".max", "number", "undefined", "",
+                    "最大輝度が指定されていません"});
+            }
+            auto maxResult = ValidateNumber(range["max"], rangePath + ".max", 0, 100);
+            if (!maxResult.isValid)
+                throw ConfigException(maxResult);
+
+            // min <= maxの検証
+            int minBrightness = range["min"].get<int>();
+            int maxBrightness = range["max"].get<int>();
+            if (minBrightness > maxBrightness)
+            {
+                throw ConfigException(ConfigValidationResult{
+                    false, rangePath, "", "",
+                    "min: " + std::to_string(minBrightness) + ", max: " + std::to_string(maxBrightness),
+                    "最小輝度は最大輝度以下である必要があります"});
+            }
+        }
+    }
+
     // プラグインセクションの検証
     if (!m_config.contains("plugins"))
     {
@@ -965,4 +1228,99 @@ void ConfigManager::SetMaxBrightness(int value)
 
     m_config["brightness_daemon"]["max_brightness"] = value;
     Save();
+}
+
+nlohmann::json ConfigManager::CreateDefaultMonitorConfig(const std::string& name) const
+{
+    return {
+        {"name", name},
+        {"brightness_range", {
+            {"min", 0},
+            {"max", 100}
+        }}
+    };
+}
+
+void ConfigManager::CreateBackup() const
+{
+    if (!m_isLoaded)
+    {
+        throw ConfigException("設定が読み込まれていません");
+    }
+
+    try
+    {
+        std::filesystem::path backupPath = GetBackupPath();
+        std::filesystem::create_directories(backupPath.parent_path());
+
+        std::ofstream backupFile(backupPath);
+        if (!backupFile.is_open())
+        {
+            throw ConfigException("バックアップファイルを作成できませんでした: " + backupPath.string());
+        }
+
+        backupFile << m_config.dump(2);
+        backupFile.close();
+    }
+    catch (const std::exception& e)
+    {
+        throw ConfigException("バックアップの作成に失敗しました: " + std::string(e.what()));
+    }
+}
+
+std::string ConfigManager::GetBackupPath() const
+{
+    std::filesystem::path configPath = GetConfigPath();
+    std::time_t now = std::time(nullptr);
+    std::stringstream ss;
+    ss << configPath.stem().string() << "_backup_"
+       << std::put_time(std::localtime(&now), "%Y%m%d_%H%M%S")
+       << configPath.extension().string();
+    return (configPath.parent_path() / ss.str()).string();
+}
+
+void ConfigManager::RestoreFromBackup()
+{
+    std::filesystem::path configDir = std::filesystem::path(GetConfigPath()).parent_path();
+    std::vector<std::filesystem::path> backupFiles;
+
+    // バックアップファイルを検索
+    for (const auto& entry : std::filesystem::directory_iterator(configDir))
+    {
+        if (entry.path().filename().string().find("_backup_") != std::string::npos)
+        {
+            backupFiles.push_back(entry.path());
+        }
+    }
+
+    if (backupFiles.empty())
+    {
+        throw ConfigException("利用可能なバックアップファイルが見つかりません");
+    }
+
+    // 最新のバックアップファイルを使用
+    std::sort(backupFiles.begin(), backupFiles.end(), std::greater<>());
+    std::filesystem::path latestBackup = backupFiles[0];
+
+    try
+    {
+        std::ifstream backupFile(latestBackup);
+        if (!backupFile.is_open())
+        {
+            throw ConfigException("バックアップファイルを開けませんでした: " + latestBackup.string());
+        }
+
+        nlohmann::json backupConfig = nlohmann::json::parse(backupFile);
+        m_config = backupConfig;
+        ValidateConfig();
+        Save();
+    }
+    catch (const nlohmann::json::exception& e)
+    {
+        throw ConfigException("バックアップファイルの解析に失敗しました: " + std::string(e.what()));
+    }
+    catch (const std::exception& e)
+    {
+        throw ConfigException("バックアップからの復元に失敗しました: " + std::string(e.what()));
+    }
 }

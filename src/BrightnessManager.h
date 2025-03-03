@@ -32,6 +32,10 @@ public:
     void SetUpdateInterval(std::chrono::milliseconds interval);
     void SetBrightnessRange(int minBrightness, int maxBrightness);
 
+    // モニターコントローラーへのアクセス
+    MonitorController& GetMonitorController() { return *m_controller; }
+    const MonitorController& GetMonitorController() const { return *m_controller; }
+
 private:
     void SyncLoop();
     int CalculateBrightness(int lightLevel) const;

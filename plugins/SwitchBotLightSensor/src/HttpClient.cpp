@@ -132,6 +132,7 @@ nlohmann::json HttpClient::Get(const std::string& endpoint) {
     std::cout << "  - Timestamp: " << timestamp << std::endl;
     std::cout << "  - Nonce: " << nonce << std::endl;
     std::cout << "  - Token: " << m_token.substr(0, 5) << "..." << m_token.substr(m_token.length() - 5) << std::endl;
+    std::cout << "  - Sign: " << signature << std::endl;
 
     std::string response_string;
     curl_easy_setopt(m_curl, CURLOPT_URL, endpoint.c_str());

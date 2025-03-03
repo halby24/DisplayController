@@ -10,6 +10,9 @@
 #include <string>
 #include <memory>
 #include <vector>
+#include <sstream>
+#include <iomanip>
+#include <ctime>
 #include <nlohmann/json.hpp>
 #include <common/StringUtils.h>
 
@@ -40,6 +43,18 @@ struct DISPLAYCONTROLLERLIB_API ConfigValidationResult
         }
 
         return detail;
+    }
+};
+
+// モニターの輝度範囲設定を管理する構造体
+struct DISPLAYCONTROLLERLIB_API MonitorBrightnessRange
+{
+    int min = 0;    // デフォルト値
+    int max = 100;  // デフォルト値
+
+    bool IsValid() const
+    {
+        return min >= 0 && max > min && max <= 100;
     }
 };
 
@@ -90,6 +105,18 @@ public:
     CalibrationSettings GetDeviceCalibration(const std::string &deviceId) const;
     void SetDeviceCalibration(const std::string &deviceName, const CalibrationSettings &settings);
 
+    // モニター設定の管理
+    std::vector<std::string> GetMonitorNames() const;
+    bool HasMonitor(const std::string &name) const;
+    MonitorBrightnessRange GetMonitorBrightnessRange(const std::string &name) const;
+    void SetMonitorBrightnessRange(const std::string &name, const MonitorBrightnessRange &range);
+    void AddMonitor(const std::string &name, const MonitorBrightnessRange &range);
+    void RemoveMonitor(const std::string &name);
+
+    // バックアップ関連
+    void CreateBackup() const;
+    void RestoreFromBackup();
+
 private:
     ConfigManager() = default;
     ~ConfigManager() = default;
@@ -100,6 +127,10 @@ private:
     void ValidateConfig() const;
     void CreateDefaultConfig();
     void EnsureConfigDirectoryExists() const;
+    std::string GetBackupPath() const;
+
+    // モニター設定関連
+    nlohmann::json CreateDefaultMonitorConfig(const std::string& name) const;
 
     // 設定値のバリデーションヘルパー
     ConfigValidationResult ValidateValue(const nlohmann::json& value,
