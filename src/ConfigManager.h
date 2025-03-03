@@ -87,7 +87,7 @@ public:
     void SetMaxBrightness(int value);
 
     // キャリブレーション設定の取得と設定
-    CalibrationSettings GetDeviceCalibration(const std::string &deviceName) const;
+    CalibrationSettings GetDeviceCalibration(const std::string &deviceId) const;
     void SetDeviceCalibration(const std::string &deviceName, const CalibrationSettings &settings);
 
 private:

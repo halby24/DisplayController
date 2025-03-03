@@ -53,7 +53,7 @@ void ConfigManager::CreateDefaultConfig()
     Save();
 }
 
-CalibrationSettings ConfigManager::GetDeviceCalibration(const std::string &deviceName) const
+CalibrationSettings ConfigManager::GetDeviceCalibration(const std::string &deviceId) const
 {
     if (!m_isLoaded)
     {
@@ -88,7 +88,7 @@ CalibrationSettings ConfigManager::GetDeviceCalibration(const std::string &devic
     for (size_t i = 0; i < devices.size(); ++i)
     {
         const auto &device = devices[i];
-        if (device["name"] == deviceName)
+        if (device["id"] == deviceId)
         {
             std::string devicePath = "plugins.SwitchBotLightSensor.devices[" + std::to_string(i) + "]";
             CalibrationSettings settings;
@@ -157,7 +157,7 @@ CalibrationSettings ConfigManager::GetDeviceCalibration(const std::string &devic
                     "",
                     "min_raw_value: " + std::to_string(settings.minRawValue) +
                         ", max_raw_value: " + std::to_string(settings.maxRawValue),
-                    "不正なキャリブレーション設定です: " + deviceName});
+                    "不正なキャリブレーション設定です: " + deviceId});
             }
             return settings;
         }
@@ -168,8 +168,8 @@ CalibrationSettings ConfigManager::GetDeviceCalibration(const std::string &devic
         "plugins.SwitchBotLightSensor.devices",
         "",
         "",
-        deviceName,
-        "デバイスが見つかりません: " + deviceName});
+        deviceId,
+        "デバイスが見つかりません: " + deviceId});
 }
 
 void ConfigManager::SetDeviceCalibration(const std::string &deviceName, const CalibrationSettings &settings)
