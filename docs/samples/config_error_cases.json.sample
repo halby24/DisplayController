@@ -1,0 +1,32 @@
+{
+  "plugins": {
+    "DummyLightSensor": {
+      "devices": [
+        {
+          "id": "",  // エラー: 空のID
+          "name": "Dummy Sensor 1",
+          "type": "Light Sensor"
+        }
+      ]
+    },
+    "SwitchBotLightSensor": {
+      "global_settings": "invalid",  // エラー: オブジェクトではなく文字列
+      "devices": [
+        {
+          "id": "device-1",
+          "name": 123,  // エラー: 文字列ではなく数値
+          "type": "Light Sensor",
+          "calibration": {
+            "min_raw_value": "100",  // エラー: 数値が文字列
+            "max_raw_value": 50  // エラー: min_raw_valueより小さい値
+          }
+        }
+      ]
+    }
+  },
+  "brightness_daemon": {
+    "update_interval_ms": 500,  // エラー: 1000未満
+    "min_brightness": 150,  // エラー: 100より大きい
+    "max_brightness": 50   // エラー: min_brightnessより小さい
+  }
+}

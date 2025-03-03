@@ -99,11 +99,31 @@ std::unique_ptr<ILightSensor> CreateLightSensor() {
         StringUtils::OutputMessage("プラグインを読み込みました: " + std::to_string(loadedCount) + "個");
 
         if (config.HasDeviceType("Light Sensor")) {
-            auto device = config.GetFirstDeviceByType("Light Sensor");
+            // Light Sensorタイプのデバイスを取得
+            auto devices = config.GetDevicesByType("Light Sensor");
+            if (devices.empty()) {
+                throw std::runtime_error("Light Sensorタイプのデバイスが見つかりません");
+            }
+
+            // 最初のデバイスを使用
+            auto device = devices[0];
             const std::string& deviceName = device["name"].get<std::string>();
-            const std::string& pluginName = config.GetPluginConfig(device["pluginName"].get<std::string>(), "name", deviceName);
-            StringUtils::OutputMessage("Light Sensorプラグインを使用: " + pluginName);
-            return g_pluginLoader->CreateSensor(pluginName, device);
+
+            // プラグインを探索
+            for (const auto& plugin : {"SwitchBotLightSensor", "DummyLightSensor"}) {
+                try {
+                    // デバイス名でプラグインの設定を取得してみる
+                    // 成功すれば、そのプラグインに属しているデバイス
+                    config.GetPluginConfig(plugin, "id", deviceName);
+                    StringUtils::OutputMessage("Light Sensorプラグインを使用: " + std::string(plugin));
+                    return g_pluginLoader->CreateSensor(plugin, device);
+                } catch (const ConfigException&) {
+                    // このプラグインには属していない
+                    continue;
+                }
+            }
+
+            throw std::runtime_error("デバイス " + deviceName + " に対応するプラグインが見つかりません");
         }
         else {
             StringUtils::OutputMessage("Light Sensorタイプのデバイスが設定されていません。設定ファイルにLight Sensorデバイスを追加してください。一時的にダミーセンサーを使用します。");

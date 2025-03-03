@@ -97,7 +97,7 @@ std::string HttpClient::GetTimestamp() {
 
 void HttpClient::SetupHeaders(void* request, const std::string& signature, const std::string& nonce) {
     struct curl_slist* headers = nullptr;
-    headers = curl_slist_append(headers, ("Authorization: Bearer " + m_token).c_str());
+    headers = curl_slist_append(headers, ("Authorization: " + m_token).c_str());
     headers = curl_slist_append(headers, "Content-Type: application/json");
     headers = curl_slist_append(headers, ("t: " + GetTimestamp()).c_str());
     headers = curl_slist_append(headers, ("sign: " + signature).c_str());

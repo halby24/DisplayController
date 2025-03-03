@@ -9,8 +9,39 @@
 
 #include <string>
 #include <memory>
+#include <vector>
 #include <nlohmann/json.hpp>
 #include <common/StringUtils.h>
+
+// 設定のバリデーション結果を格納する構造体
+struct DISPLAYCONTROLLERLIB_API ConfigValidationResult
+{
+    bool isValid = true;
+    std::string path;
+    std::string expectedType;
+    std::string actualType;
+    std::string value;
+    std::string message;
+
+    // エラーメッセージを生成
+    std::string FormatMessage() const {
+        if (isValid) return "";
+
+        std::string detail = "設定エラー: " + message + "\n";
+        detail += "場所: " + path + "\n";
+
+        if (!expectedType.empty() && !actualType.empty()) {
+            detail += "期待される型: " + expectedType + "\n";
+            detail += "実際の型: " + actualType + "\n";
+        }
+
+        if (!value.empty()) {
+            detail += "値: " + value;
+        }
+
+        return detail;
+    }
+};
 
 // キャリブレーション設定を管理する構造体
 struct DISPLAYCONTROLLERLIB_API CalibrationSettings
@@ -70,6 +101,22 @@ private:
     void CreateDefaultConfig();
     void EnsureConfigDirectoryExists() const;
 
+    // 設定値のバリデーションヘルパー
+    ConfigValidationResult ValidateValue(const nlohmann::json& value,
+                                       const std::string& path,
+                                       const std::string& expectedType) const;
+    ConfigValidationResult ValidateNumber(const nlohmann::json& value,
+                                        const std::string& path,
+                                        int min,
+                                        int max) const;
+    ConfigValidationResult ValidateString(const nlohmann::json& value,
+                                        const std::string& path,
+                                        bool allowEmpty = false) const;
+    ConfigValidationResult ValidateObject(const nlohmann::json& value,
+                                        const std::string& path) const;
+    ConfigValidationResult ValidateArray(const nlohmann::json& value,
+                                       const std::string& path) const;
+
     nlohmann::json m_config;
     bool m_isLoaded = false;
     static constexpr const char *CONFIG_FILENAME = "config.json";
@@ -79,10 +126,19 @@ class ConfigException : public std::runtime_error
 {
 public:
     explicit ConfigException(const std::string &message)
-        : std::runtime_error(message)
+        : std::runtime_error(message), m_validationResult()
     {
-        // エラーメッセージはすでにUTF-8なので変換は不要
     }
+
+    explicit ConfigException(const ConfigValidationResult& result)
+        : std::runtime_error(result.FormatMessage()), m_validationResult(result)
+    {
+    }
+
+    const ConfigValidationResult& GetValidationResult() const { return m_validationResult; }
+
+private:
+    ConfigValidationResult m_validationResult;
 };
 
 #endif // DISPLAYCONTROLLER_CONFIG_MANAGER_H

@@ -45,94 +45,164 @@ void ConfigManager::EnsureConfigDirectoryExists() const
     }
 }
 
-void ConfigManager::CreateDefaultConfig() {
+void ConfigManager::CreateDefaultConfig()
+{
     m_config = nlohmann::json{
-        {"plugins", {
-            {"DummyLightSensor", {
-                {"devices", nlohmann::json::array({
-                    {"id", ""},
-                    {"name", "Dummy Sensor 1"},
-                    {"type", "Light Sensor"}
-                })}
-            }},
-            {"SwitchBotLightSensor", {
-                {"global_settings", {
-                    {"token", ""},
-                    {"secret", ""}
-                }},
-                {"devices", nlohmann::json::array({
-                    {"id", ""},
-                    {"name", "SwitchBot Sensor 1"},
-                    {"type", "Light Sensor"}
-                })}
-            }}
-        }},
-        {"brightness_daemon", {
-            {"update_interval_ms", 5000},
-            {"min_brightness", 0},
-            {"max_brightness", 100}
-        }}
-    };
+        {"plugins", {{"DummyLightSensor", {{"devices", nlohmann::json::array({{"id", ""}, {"name", "Dummy Sensor 1"}, {"type", "Light Sensor"}})}}}, {"SwitchBotLightSensor", {{"global_settings", {{"token", ""}, {"secret", ""}}}, {"devices", nlohmann::json::array({{"id", ""}, {"name", "SwitchBot Sensor 1"}, {"type", "Light Sensor"}})}}}}},
+        {"brightness_daemon", {{"update_interval_ms", 5000}, {"min_brightness", 0}, {"max_brightness", 100}}}};
     Save();
 }
 
-CalibrationSettings ConfigManager::GetDeviceCalibration(const std::string &deviceName) const {
-    if (!m_isLoaded) {
+CalibrationSettings ConfigManager::GetDeviceCalibration(const std::string &deviceName) const
+{
+    if (!m_isLoaded)
+    {
         throw ConfigException("設定が読み込まれていません");
     }
 
-    const auto& plugins = m_config["plugins"];
-    for (auto& [pluginName, pluginConfig] : plugins.items()) {
-        if (pluginName == "SwitchBotLightSensor") {
-            if (pluginConfig.contains("devices")) {
-                const auto& devices = pluginConfig["devices"];
-                for (const auto &device : devices) {
-                    if (device["name"] == deviceName) {
-                        CalibrationSettings settings;
-                        if (device.contains("calibration")) {
-                            const auto &calibration = device["calibration"];
-                            if (calibration.contains("min_raw_value")) {
-                                settings.minRawValue = calibration["min_raw_value"].get<int>();
-                            }
-                            if (calibration.contains("max_raw_value")) {
-                                settings.maxRawValue = calibration["max_raw_value"].get<int>();
-                            }
-                        }
+    const auto &plugins = m_config["plugins"];
+    if (!plugins.contains("SwitchBotLightSensor"))
+    {
+        throw ConfigException(ConfigValidationResult{
+            false,
+            "plugins.SwitchBotLightSensor",
+            "object",
+            "undefined",
+            "",
+            "SwitchBotLightSensorプラグインが見つかりません"});
+    }
 
-                        if (!settings.IsValid()) {
-                            throw ConfigException("不正なキャリブレーション設定です: " + deviceName);
+    const auto &pluginConfig = plugins["SwitchBotLightSensor"];
+    if (!pluginConfig.contains("devices"))
+    {
+        throw ConfigException(ConfigValidationResult{
+            false,
+            "plugins.SwitchBotLightSensor.devices",
+            "array",
+            "undefined",
+            "",
+            "devicesセクションが見つかりません"});
+    }
+
+    const auto &devices = pluginConfig["devices"];
+    for (size_t i = 0; i < devices.size(); ++i)
+    {
+        const auto &device = devices[i];
+        if (device["name"] == deviceName)
+        {
+            std::string devicePath = "plugins.SwitchBotLightSensor.devices[" + std::to_string(i) + "]";
+            CalibrationSettings settings;
+
+            if (device.contains("calibration"))
+            {
+                const auto &calibration = device["calibration"];
+                std::string calibrationPath = devicePath + ".calibration";
+
+                try
+                {
+                    if (calibration.contains("min_raw_value"))
+                    {
+                        if (calibration["min_raw_value"].is_null())
+                        {
+                            throw ConfigException(ConfigValidationResult{
+                                false,
+                                calibrationPath + ".min_raw_value",
+                                "number",
+                                "null",
+                                "null",
+                                "min_raw_valueがnullです"});
                         }
-                        return settings;
+                        auto result = ValidateNumber(calibration["min_raw_value"], calibrationPath + ".min_raw_value", 0, INT_MAX);
+                        if (!result.isValid)
+                            throw ConfigException(result);
+                        settings.minRawValue = calibration["min_raw_value"].get<int>();
+                    }
+
+                    if (calibration.contains("max_raw_value"))
+                    {
+                        if (calibration["max_raw_value"].is_null())
+                        {
+                            throw ConfigException(ConfigValidationResult{
+                                false,
+                                calibrationPath + ".max_raw_value",
+                                "number",
+                                "null",
+                                "null",
+                                "max_raw_valueがnullです"});
+                        }
+                        auto result = ValidateNumber(calibration["max_raw_value"], calibrationPath + ".max_raw_value", 0, INT_MAX);
+                        if (!result.isValid)
+                            throw ConfigException(result);
+                        settings.maxRawValue = calibration["max_raw_value"].get<int>();
                     }
                 }
+                catch (const nlohmann::json::type_error &e)
+                {
+                    throw ConfigException(ConfigValidationResult{
+                        false,
+                        calibrationPath,
+                        "number",
+                        "invalid",
+                        "",
+                        "キャリブレーション設定の値が不正です: " + std::string(e.what())});
+                }
             }
+
+            if (!settings.IsValid())
+            {
+                throw ConfigException(ConfigValidationResult{
+                    false,
+                    devicePath + ".calibration",
+                    "",
+                    "",
+                    "min_raw_value: " + std::to_string(settings.minRawValue) +
+                        ", max_raw_value: " + std::to_string(settings.maxRawValue),
+                    "不正なキャリブレーション設定です: " + deviceName});
+            }
+            return settings;
         }
     }
-    throw ConfigException("デバイスが見つかりません: " + deviceName);
+
+    throw ConfigException(ConfigValidationResult{
+        false,
+        "plugins.SwitchBotLightSensor.devices",
+        "",
+        "",
+        deviceName,
+        "デバイスが見つかりません: " + deviceName});
 }
 
-void ConfigManager::SetDeviceCalibration(const std::string &deviceName, const CalibrationSettings &settings) {
-    if (!m_isLoaded) {
+void ConfigManager::SetDeviceCalibration(const std::string &deviceName, const CalibrationSettings &settings)
+{
+    if (!m_isLoaded)
+    {
         throw ConfigException("設定が読み込まれていません");
     }
 
-    if (!settings.IsValid()) {
+    if (!settings.IsValid())
+    {
         throw ConfigException("不正なキャリブレーション設定です");
     }
 
-    auto& plugins = m_config["plugins"];
-    for (auto& [pluginName, pluginConfig] : plugins.items()) {
-        if (pluginName == "SwitchBotLightSensor") {
-            if (pluginConfig.contains("devices")) {
+    auto &plugins = m_config["plugins"];
+    for (auto &[pluginName, pluginConfig] : plugins.items())
+    {
+        if (pluginName == "SwitchBotLightSensor")
+        {
+            if (pluginConfig.contains("devices"))
+            {
                 auto &devices = pluginConfig["devices"];
-                for (auto &device : devices) {
-                    if (device["name"] == deviceName) {
+                for (auto &device : devices)
+                {
+                    if (device["name"] == deviceName)
+                    {
                         // calibrationオブジェクトが存在しない場合は新規作成
-                        if (!device.contains("calibration")) {
+                        if (!device.contains("calibration"))
+                        {
                             device["calibration"] = nlohmann::json::object();
                         }
 
-                        auto& calibration = device["calibration"];
+                        auto &calibration = device["calibration"];
                         calibration["min_raw_value"] = settings.minRawValue;
                         calibration["max_raw_value"] = settings.maxRawValue;
                         Save();
@@ -145,131 +215,273 @@ void ConfigManager::SetDeviceCalibration(const std::string &deviceName, const Ca
     throw ConfigException("デバイスが見つかりません: " + deviceName);
 }
 
-void ConfigManager::ValidateConfig() const {
-    if (!m_config.contains("plugins")) {
-        throw ConfigException("設定ファイルにpluginsセクションがありません");
+// バリデーションヘルパーメソッドの実装
+ConfigValidationResult ConfigManager::ValidateValue(const nlohmann::json &value,
+                                                    const std::string &path,
+                                                    const std::string &expectedType) const
+{
+    ConfigValidationResult result;
+    result.path = path;
+    result.expectedType = expectedType;
+
+    if (expectedType == "string" && !value.is_string())
+    {
+        result.isValid = false;
+        result.actualType = value.type_name();
+        result.value = value.dump();
+        result.message = "文字列である必要があります";
     }
-const auto& plugins = m_config["plugins"];
-for (auto& [pluginName, pluginConfig] : plugins.items()) {
-
-
-        if (!pluginConfig.contains("devices") && !pluginConfig.contains("global_settings")) {
-            throw ConfigException("プラグイン " + pluginName + " に devices または global_settings セクションがありません");
-        }
-
-        if (pluginConfig.contains("global_settings")) {
-            if (!pluginConfig["global_settings"].is_object()) {
-                throw ConfigException("プラグイン " + pluginName + " の global_settings はオブジェクトである必要があります");
-            }
-        }
-
-        if (pluginConfig.contains("devices")) {
-            if (!pluginConfig["devices"].is_array()) {
-                throw ConfigException("プラグイン " + pluginName + " の devices は配列である必要があります");
-            }
-
-            const auto& devices = pluginConfig["devices"];
-            for (const auto &device : devices) {
-                if (!device.contains("id")) {
-                    throw ConfigException("デバイス設定にIDが指定されていません");
-                }
-                if (!device.contains("name")) {
-                    throw ConfigException("デバイス設定に名前が指定されていません");
-                }
-                if (!device.contains("type")) {
-                    throw ConfigException("デバイス設定にタイプが指定されていません");
-                }
-
-                if (!device["id"].is_string() || device["id"].get<std::string>().empty()) {
-                    throw ConfigException("デバイスIDは空でない文字列である必要があります");
-                }
-                if (!device["name"].is_string() || device["name"].get<std::string>().empty()) {
-                    throw ConfigException("デバイス名は空でない文字列である必要があります");
-                }
-                if (!device["type"].is_string() || device["type"].get<std::string>().empty()) {
-                    throw ConfigException("デバイスタイプは空でない文字列である必要があります");
-                }
-
-                if (device.contains("description") && !device["description"].is_string()) {
-                    throw ConfigException("デバイスの説明は文字列である必要があります");
-                }
-            }
-        }
+    else if (expectedType == "number" && !value.is_number())
+    {
+        result.isValid = false;
+        result.actualType = value.type_name();
+        result.value = value.dump();
+        result.message = "数値である必要があります";
+    }
+    else if (expectedType == "object" && !value.is_object())
+    {
+        result.isValid = false;
+        result.actualType = value.type_name();
+        result.value = value.dump();
+        result.message = "オブジェクトである必要があります";
+    }
+    else if (expectedType == "array" && !value.is_array())
+    {
+        result.isValid = false;
+        result.actualType = value.type_name();
+        result.value = value.dump();
+        result.message = "配列である必要があります";
     }
 
-    if (!m_config.contains("brightness_daemon")) {
-        throw ConfigException("設定ファイルにbrightness_daemonセクションがありません");
+    return result;
+}
+
+ConfigValidationResult ConfigManager::ValidateNumber(const nlohmann::json &value,
+                                                     const std::string &path,
+                                                     int min,
+                                                     int max) const
+{
+    auto result = ValidateValue(value, path, "number");
+    if (!result.isValid)
+        return result;
+
+    int numValue = value.get<int>();
+    if (numValue < min || numValue > max)
+    {
+        result.isValid = false;
+        result.value = std::to_string(numValue);
+        result.message = std::to_string(min) + "から" + std::to_string(max) + "の範囲である必要があります";
+    }
+
+    return result;
+}
+
+ConfigValidationResult ConfigManager::ValidateString(const nlohmann::json &value,
+                                                     const std::string &path,
+                                                     bool allowEmpty) const
+{
+    auto result = ValidateValue(value, path, "string");
+    if (!result.isValid)
+        return result;
+
+    std::string strValue = value.get<std::string>();
+    if (!allowEmpty && strValue.empty())
+    {
+        result.isValid = false;
+        result.value = strValue;
+        result.message = "空の文字列は許可されていません";
+    }
+
+    return result;
+}
+
+ConfigValidationResult ConfigManager::ValidateObject(const nlohmann::json &value,
+                                                     const std::string &path) const
+{
+    return ValidateValue(value, path, "object");
+}
+
+ConfigValidationResult ConfigManager::ValidateArray(const nlohmann::json &value,
+                                                    const std::string &path) const
+{
+    return ValidateValue(value, path, "array");
+}
+
+void ConfigManager::ValidateConfig() const
+{
+    // プラグインセクションの検証
+    if (!m_config.contains("plugins"))
+    {
+        throw ConfigException(ConfigValidationResult{
+            false, "plugins", "object", "undefined", "",
+            "設定ファイルにpluginsセクションがありません"});
+    }
+
+    const auto &plugins = m_config["plugins"];
+    for (auto &[pluginName, pluginConfig] : plugins.items())
+    {
+        std::string pluginPath = "plugins." + pluginName;
+
+        // プラグイン設定の基本構造を検証
+        if (!pluginConfig.contains("devices") && !pluginConfig.contains("global_settings"))
+        {
+            throw ConfigException(ConfigValidationResult{
+                false, pluginPath, "", "", "",
+                "devices または global_settings セクションがありません"});
+        }
+
+        // global_settingsの検証
+        if (pluginConfig.contains("global_settings"))
+        {
+            auto result = ValidateObject(pluginConfig["global_settings"], pluginPath + ".global_settings");
+            if (!result.isValid)
+                throw ConfigException(result);
+        }
+
+        // devicesの検証
+        if (pluginConfig.contains("devices"))
+        {
+            auto result = ValidateArray(pluginConfig["devices"], pluginPath + ".devices");
+            if (!result.isValid)
+                throw ConfigException(result);
+
+            const auto &devices = pluginConfig["devices"];
+            for (size_t i = 0; i < devices.size(); ++i)
+            {
+                const auto &device = devices[i];
+                std::string devicePath = pluginPath + ".devices[" + std::to_string(i) + "]";
+
+                // 必須フィールドの存在チェック
+                for (const auto &field : {"id", "name", "type"})
+                {
+                    if (!device.contains(field))
+                    {
+                        throw ConfigException(ConfigValidationResult{
+                            false, devicePath + "." + field, "string", "undefined", "",
+                            std::string(field) + "が指定されていません"});
+                    }
+                }
+
+                // 各フィールドの型と値の検証
+                auto idResult = ValidateString(device["id"], devicePath + ".id");
+                if (!idResult.isValid)
+                    throw ConfigException(idResult);
+
+                auto nameResult = ValidateString(device["name"], devicePath + ".name");
+                if (!nameResult.isValid)
+                    throw ConfigException(nameResult);
+
+                auto typeResult = ValidateString(device["type"], devicePath + ".type");
+                if (!typeResult.isValid)
+                    throw ConfigException(typeResult);
+
+                if (device.contains("description"))
+                {
+                    auto descResult = ValidateString(device["description"], devicePath + ".description", true);
+                    if (!descResult.isValid)
+                        throw ConfigException(descResult);
+                }
+            }
+        }
+    }
+
+    // brightness_daemonセクションの検証
+    if (!m_config.contains("brightness_daemon"))
+    {
+        throw ConfigException(ConfigValidationResult{
+            false, "brightness_daemon", "object", "undefined", "",
+            "設定ファイルにbrightness_daemonセクションがありません"});
     }
 
     const auto &brightness = m_config["brightness_daemon"];
-    if (!brightness.contains("update_interval_ms")) {
-        throw ConfigException("update_interval_msが設定されていません");
-    }
-    if (!brightness.contains("min_brightness")) {
-        throw ConfigException("min_brightnessが設定されていません");
-    }
-    if (!brightness.contains("max_brightness")) {
-        throw ConfigException("max_brightnessが設定されていません");
-    }
+    std::string brightnessPath = "brightness_daemon";
 
-    int interval = brightness["update_interval_ms"].get<int>();
-    if (interval < 1000) {
-        throw ConfigException("update_interval_msは1000以上である必要があります");
+    // update_interval_msの検証
+    if (!brightness.contains("update_interval_ms"))
+    {
+        throw ConfigException(ConfigValidationResult{
+            false, brightnessPath + ".update_interval_ms", "number", "undefined", "",
+            "update_interval_msが設定されていません"});
     }
+    auto intervalResult = ValidateNumber(brightness["update_interval_ms"], brightnessPath + ".update_interval_ms", 1000, INT_MAX);
+    if (!intervalResult.isValid)
+        throw ConfigException(intervalResult);
 
+    // min_brightnessの検証
+    if (!brightness.contains("min_brightness"))
+    {
+        throw ConfigException(ConfigValidationResult{
+            false, brightnessPath + ".min_brightness", "number", "undefined", "",
+            "min_brightnessが設定されていません"});
+    }
+    auto minResult = ValidateNumber(brightness["min_brightness"], brightnessPath + ".min_brightness", 0, 100);
+    if (!minResult.isValid)
+        throw ConfigException(minResult);
+
+    // max_brightnessの検証
+    if (!brightness.contains("max_brightness"))
+    {
+        throw ConfigException(ConfigValidationResult{
+            false, brightnessPath + ".max_brightness", "number", "undefined", "",
+            "max_brightnessが設定されていません"});
+    }
+    auto maxResult = ValidateNumber(brightness["max_brightness"], brightnessPath + ".max_brightness", 0, 100);
+    if (!maxResult.isValid)
+        throw ConfigException(maxResult);
+
+    // min_brightness <= max_brightnessの検証
     int minBrightness = brightness["min_brightness"].get<int>();
-    if (minBrightness < 0 || minBrightness > 100) {
-        throw ConfigException("min_brightnessは0から100の範囲である必要があります");
-    }
-
     int maxBrightness = brightness["max_brightness"].get<int>();
-    if (maxBrightness < 0 || maxBrightness > 100) {
-        throw ConfigException("max_brightnessは0から100の範囲である必要があります");
-    }
-
-    if (minBrightness > maxBrightness) {
-        throw ConfigException("min_brightnessはmax_brightness以下である必要があります");
+    if (minBrightness > maxBrightness)
+    {
+        throw ConfigException(ConfigValidationResult{
+            false, brightnessPath, "", "",
+            "min_brightness: " + std::to_string(minBrightness) + ", max_brightness: " + std::to_string(maxBrightness),
+            "min_brightnessはmax_brightness以下である必要があります"});
     }
 }
 
-void ConfigManager::Load() {
-try {
-    std::string configPath = GetConfigPath();
-    if (!std::filesystem::exists(configPath)) {
-        EnsureConfigDirectoryExists();
-        CreateDefaultConfig();
-        return;
+void ConfigManager::Load()
+{
+    try
+    {
+        std::string configPath = GetConfigPath();
+        if (!std::filesystem::exists(configPath))
+        {
+            EnsureConfigDirectoryExists();
+            CreateDefaultConfig();
+            return;
+        }
+
+        std::ifstream file(configPath);
+        if (!file.is_open())
+        {
+            throw ConfigException("設定ファイルを開けませんでした");
+        }
+
+        nlohmann::json loadedConfig;
+        file >> loadedConfig;
+
+        // 後方互換性のための移行ロジック
+        if (loadedConfig.contains("switchbot") && !loadedConfig.contains("plugins"))
+        {
+            // switchbot セクションを plugins セクションに移行
+            nlohmann::json plugins = nlohmann::json::object();
+            plugins["SwitchBotLightSensor"] = {
+                {"global_settings", {{"token", loadedConfig["switchbot"]["token"]}, {"secret", loadedConfig["switchbot"]["secret"]}}},
+                {"devices", loadedConfig["switchbot"]["devices"]}};
+            loadedConfig["plugins"] = plugins;
+            loadedConfig.erase("switchbot");
+        }
+
+        m_config = loadedConfig;
+        ValidateConfig();
+        m_isLoaded = true;
     }
-
-    std::ifstream file(configPath);
-    if (!file.is_open()) {
-        throw ConfigException("設定ファイルを開けませんでした");
+    catch (const nlohmann::json::exception &e)
+    {
+        throw ConfigException("設定ファイルの解析に失敗しました : " + std::string(e.what()));
     }
-
-    nlohmann::json loadedConfig;
-    file >> loadedConfig;
-
-    // 後方互換性のための移行ロジック
-    if (loadedConfig.contains("switchbot") && !loadedConfig.contains("plugins")) {
-        // switchbot セクションを plugins セクションに移行
-        nlohmann::json plugins = nlohmann::json::object();
-        plugins["SwitchBotLightSensor"] = {
-            {"global_settings", {
-                {"token", loadedConfig["switchbot"]["token"]},
-                {"secret", loadedConfig["switchbot"]["secret"]}
-            }},
-            {"devices", loadedConfig["switchbot"]["devices"]}
-        };
-        loadedConfig["plugins"] = plugins;
-        loadedConfig.erase("switchbot");
-    }
-
-    m_config = loadedConfig;
-    ValidateConfig();
-    m_isLoaded = true;
-} catch (const nlohmann::json::exception &e) {
-    throw ConfigException("設定ファイルの解析に失敗しました : " + std::string(e.what()));
-}
 }
 
 void ConfigManager::Save()
@@ -292,46 +504,160 @@ void ConfigManager::Save()
     }
 }
 
-std::string ConfigManager::GetPluginConfig(const std::string& pluginName, const std::string& key, const std::string& deviceName) const
+std::string ConfigManager::GetPluginConfig(const std::string &pluginName, const std::string &key, const std::string &deviceName) const
 {
     if (!m_isLoaded)
     {
         throw ConfigException("設定が読み込まれていません");
     }
 
-    const auto& plugins = m_config["plugins"];
+    const auto &plugins = m_config["plugins"];
     if (!plugins.contains(pluginName))
     {
-        throw ConfigException("プラグインが見つかりません: " + pluginName);
+        throw ConfigException(ConfigValidationResult{
+            false,
+            "plugins." + pluginName,
+            "object",
+            "undefined",
+            "",
+            "プラグインが見つかりません: " + pluginName});
     }
 
-    const auto& pluginConfig = plugins[pluginName];
+    const auto &pluginConfig = plugins[pluginName];
+    std::string basePath = "plugins." + pluginName;
 
-    if (deviceName.empty()) {
-        if (!pluginConfig.contains("global_settings") || !pluginConfig["global_settings"].contains(key)) {
-            throw ConfigException("グローバル設定が見つかりません: " + key + " in plugin: " + pluginName);
-        }
-        return pluginConfig["global_settings"][key].get<std::string>();
-    } else {
-        if (!pluginConfig.contains("devices")) {
-            throw ConfigException("デバイス設定が見つかりません in plugin: " + pluginName);
-        }
-        const auto& devices = pluginConfig["devices"];
-        for (const auto &device : devices) {
-            if (device["name"] == deviceName) {
-                if (!device.contains(key)) {
-                    throw ConfigException("デバイス設定が見つかりません: " + key + " for device: " + deviceName + " in plugin: " + pluginName);
-                }
-                return device[key].get<std::string>();
+    try
+    {
+        if (deviceName.empty())
+        {
+            // グローバル設定の取得
+            if (!pluginConfig.contains("global_settings"))
+            {
+                throw ConfigException(ConfigValidationResult{
+                    false,
+                    basePath + ".global_settings",
+                    "object",
+                    "undefined",
+                    "",
+                    "global_settingsセクションが見つかりません"});
             }
+
+            const auto &globalSettings = pluginConfig["global_settings"];
+            if (!globalSettings.contains(key))
+            {
+                throw ConfigException(ConfigValidationResult{
+                    false,
+                    basePath + ".global_settings." + key,
+                    "string",
+                    "undefined",
+                    "",
+                    "グローバル設定が見つかりません: " + key});
+            }
+
+            const auto &value = globalSettings[key];
+            if (value.is_null())
+            {
+                throw ConfigException(ConfigValidationResult{
+                    false,
+                    basePath + ".global_settings." + key,
+                    "string",
+                    "null",
+                    "null",
+                    "設定値がnullです: " + key});
+            }
+
+            auto result = ValidateString(value, basePath + ".global_settings." + key);
+            if (!result.isValid)
+            {
+                throw ConfigException(result);
+            }
+
+            return value.get<std::string>();
         }
-        throw ConfigException("デバイスが見つかりません: " + deviceName + " in plugin: " + pluginName);
+        else
+        {
+            // デバイス設定の取得
+            if (!pluginConfig.contains("devices"))
+            {
+                throw ConfigException(ConfigValidationResult{
+                    false,
+                    basePath + ".devices",
+                    "array",
+                    "undefined",
+                    "",
+                    "devicesセクションが見つかりません"});
+            }
+
+            const auto &devices = pluginConfig["devices"];
+            for (size_t i = 0; i < devices.size(); ++i)
+            {
+                const auto &device = devices[i];
+                if (device["name"] == deviceName)
+                {
+                    std::string devicePath = basePath + ".devices[" + std::to_string(i) + "]";
+
+                    if (!device.contains(key))
+                    {
+                        throw ConfigException(ConfigValidationResult{
+                            false,
+                            devicePath + "." + key,
+                            "string",
+                            "undefined",
+                            "",
+                            "デバイス設定が見つかりません: " + key});
+                    }
+
+                    const auto &value = device[key];
+                    if (value.is_null())
+                    {
+                        throw ConfigException(ConfigValidationResult{
+                            false,
+                            devicePath + "." + key,
+                            "string",
+                            "null",
+                            "null",
+                            "設定値がnullです: " + key});
+                    }
+
+                    auto result = ValidateString(value, devicePath + "." + key);
+                    if (!result.isValid)
+                    {
+                        throw ConfigException(result);
+                    }
+
+                    return value.get<std::string>();
+                }
+            }
+
+            throw ConfigException(ConfigValidationResult{
+                false,
+                basePath + ".devices",
+                "",
+                "",
+                deviceName,
+                "デバイスが見つかりません: " + deviceName});
+        }
+    }
+    catch (const nlohmann::json::type_error &e)
+    {
+        std::string path = deviceName.empty()
+                               ? basePath + ".global_settings." + key
+                               : basePath + ".devices[?]." + key;
+
+        throw ConfigException(ConfigValidationResult{
+            false,
+            path,
+            "string",
+            "invalid",
+            "",
+            "設定値の型が不正です: " + std::string(e.what())});
     }
 }
 
 void ConfigManager::AddDevice(const std::string &pluginName, const std::string &id, const std::string &name, const std::string &type, const std::string &description)
 {
-    if (pluginName.empty()) {
+    if (pluginName.empty())
+    {
         throw ConfigException("プラグイン名を指定してください");
     }
     if (id.empty())
@@ -347,13 +673,15 @@ void ConfigManager::AddDevice(const std::string &pluginName, const std::string &
         throw ConfigException("デバイスタイプを指定してください");
     }
 
-    auto& plugins = m_config["plugins"];
-    if (!plugins.contains(pluginName)) {
+    auto &plugins = m_config["plugins"];
+    if (!plugins.contains(pluginName))
+    {
         plugins[pluginName] = nlohmann::json::object();
     }
-    auto& plugin = plugins[pluginName];
+    auto &plugin = plugins[pluginName];
 
-    if (!plugin.contains("devices")) {
+    if (!plugin.contains("devices"))
+    {
         plugin["devices"] = nlohmann::json::array();
     }
     auto &devices = plugin["devices"];
@@ -392,12 +720,16 @@ std::vector<nlohmann::json> ConfigManager::GetDevicesByType(const std::string &t
     }
 
     std::vector<nlohmann::json> result;
-    const auto& plugins = m_config["plugins"];
-    for (const auto& [pluginName, pluginConfig] : plugins.items()) {
-        if (pluginConfig.contains("devices")) {
-            const auto& devices = pluginConfig["devices"];
-            for (const auto& device : devices) {
-                if (device["type"] == type) {
+    const auto &plugins = m_config["plugins"];
+    for (const auto &[pluginName, pluginConfig] : plugins.items())
+    {
+        if (pluginConfig.contains("devices"))
+        {
+            const auto &devices = pluginConfig["devices"];
+            for (const auto &device : devices)
+            {
+                if (device["type"] == type)
+                {
                     result.push_back(device);
                 }
             }
@@ -413,12 +745,16 @@ nlohmann::json ConfigManager::GetFirstDeviceByType(const std::string &type) cons
         throw ConfigException("設定が読み込まれていません");
     }
 
-    const auto& plugins = m_config["plugins"];
-    for (const auto& [pluginName, pluginConfig] : plugins.items()) {
-        if (pluginConfig.contains("devices")) {
-            const auto& devices = pluginConfig["devices"];
-            for (const auto& device : devices) {
-                if (device["type"] == type) {
+    const auto &plugins = m_config["plugins"];
+    for (const auto &[pluginName, pluginConfig] : plugins.items())
+    {
+        if (pluginConfig.contains("devices"))
+        {
+            const auto &devices = pluginConfig["devices"];
+            for (const auto &device : devices)
+            {
+                if (device["type"] == type)
+                {
                     return device;
                 }
             }
@@ -434,12 +770,16 @@ bool ConfigManager::HasDevice(const std::string &name) const
         return false;
     }
 
-    const auto& plugins = m_config["plugins"];
-    for (const auto& [pluginName, pluginConfig] : plugins.items()) {
-        if (pluginConfig.contains("devices")) {
-            const auto& devices = pluginConfig["devices"];
-            for (const auto& device : devices) {
-                if (device["name"] == name) {
+    const auto &plugins = m_config["plugins"];
+    for (const auto &[pluginName, pluginConfig] : plugins.items())
+    {
+        if (pluginConfig.contains("devices"))
+        {
+            const auto &devices = pluginConfig["devices"];
+            for (const auto &device : devices)
+            {
+                if (device["name"] == name)
+                {
                     return true;
                 }
             }
@@ -455,12 +795,16 @@ bool ConfigManager::HasDeviceType(const std::string &type) const
         return false;
     }
 
-    const auto& plugins = m_config["plugins"];
-    for (const auto& [pluginName, pluginConfig] : plugins.items()) {
-        if (pluginConfig.contains("devices")) {
-            const auto& devices = pluginConfig["devices"];
-            for (const auto& device : devices) {
-                if (device["type"] == type) {
+    const auto &plugins = m_config["plugins"];
+    for (const auto &[pluginName, pluginConfig] : plugins.items())
+    {
+        if (pluginConfig.contains("devices"))
+        {
+            const auto &devices = pluginConfig["devices"];
+            for (const auto &device : devices)
+            {
+                if (device["type"] == type)
+                {
                     return true;
                 }
             }
@@ -483,16 +827,18 @@ int ConfigManager::GetUpdateInterval() const
         throw ConfigException("brightness_daemonセクションが見つかりません");
     }
 
-    const auto& brightness = m_config["brightness_daemon"];
+    const auto &brightness = m_config["brightness_daemon"];
     if (!brightness.contains("update_interval_ms"))
     {
         throw ConfigException("update_interval_msが設定されていません");
     }
 
-    try {
+    try
+    {
         return brightness["update_interval_ms"].get<int>();
     }
-    catch (const nlohmann::json::exception& e) {
+    catch (const nlohmann::json::exception &e)
+    {
         throw ConfigException("update_interval_msの値が不正です: " + std::string(e.what()));
     }
 }
@@ -525,13 +871,14 @@ int ConfigManager::GetMinBrightness() const
         throw ConfigException("brightness_daemonセクションが見つかりません");
     }
 
-    const auto& brightness = m_config["brightness_daemon"];
+    const auto &brightness = m_config["brightness_daemon"];
     if (!brightness.contains("min_brightness"))
     {
         throw ConfigException("min_brightnessが設定されていません");
     }
 
-    try {
+    try
+    {
         int value = brightness["min_brightness"].get<int>();
         if (value < 0 || value > 100)
         {
@@ -539,7 +886,8 @@ int ConfigManager::GetMinBrightness() const
         }
         return value;
     }
-    catch (const nlohmann::json::exception& e) {
+    catch (const nlohmann::json::exception &e)
+    {
         throw ConfigException("min_brightnessの値が不正です: " + std::string(e.what()));
     }
 }
@@ -577,13 +925,14 @@ int ConfigManager::GetMaxBrightness() const
         throw ConfigException("brightness_daemonセクションが見つかりません");
     }
 
-    const auto& brightness = m_config["brightness_daemon"];
+    const auto &brightness = m_config["brightness_daemon"];
     if (!brightness.contains("max_brightness"))
     {
         throw ConfigException("max_brightnessが設定されていません");
     }
 
-    try {
+    try
+    {
         int value = brightness["max_brightness"].get<int>();
         if (value < 0 || value > 100)
         {
@@ -591,7 +940,8 @@ int ConfigManager::GetMaxBrightness() const
         }
         return value;
     }
-    catch (const nlohmann::json::exception& e) {
+    catch (const nlohmann::json::exception &e)
+    {
         throw ConfigException("max_brightnessの値が不正です: " + std::string(e.what()));
     }
 }
