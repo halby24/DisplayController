@@ -117,6 +117,9 @@ public:
     void CreateBackup() const;
     void RestoreFromBackup();
 
+    // 設定ファイルのパスを取得
+    std::string GetConfigFilePath() const;
+
 private:
     ConfigManager() = default;
     ~ConfigManager() = default;

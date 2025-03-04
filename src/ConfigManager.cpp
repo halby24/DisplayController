@@ -76,6 +76,11 @@ std::vector<std::string> ConfigManager::GetMonitorNames() const
     return names;
 }
 
+std::string ConfigManager::GetConfigFilePath() const
+{
+    return GetConfigPath();
+}
+
 bool ConfigManager::HasMonitor(const std::string &name) const
 {
     if (!m_isLoaded)

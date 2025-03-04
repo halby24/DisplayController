@@ -18,6 +18,7 @@ using json = nlohmann::json;
 #define ID_MENU_EXIT 1001
 #define ID_MENU_TOGGLE 1002
 #define ID_MENU_TOGGLE_CONSOLE 1003
+#define ID_MENU_OPEN_CONFIG 1004
 
 // グローバル変数
 HINSTANCE g_hInstance;
@@ -258,6 +259,11 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
         case ID_MENU_TOGGLE_CONSOLE:
             ToggleConsoleWindow();
             return 0;
+  case ID_MENU_OPEN_CONFIG: {
+   std::wstring configFilePath = StringUtils::Utf8ToWide(ConfigManager::Instance().GetConfigFilePath());
+   ShellExecuteW(NULL, L"open", configFilePath.c_str(), NULL, NULL, SW_SHOWNORMAL);
+   return 0;
+  }
         }
         break;
 
@@ -314,6 +320,7 @@ void ShowContextMenu(HWND hwnd, POINT pt) {
         InsertMenuW(hMenu, -1, MF_BYPOSITION | MF_STRING, ID_MENU_TOGGLE, syncText.c_str());
         InsertMenuW(hMenu, -1, MF_BYPOSITION | MF_STRING, ID_MENU_TOGGLE_CONSOLE, consoleText.c_str());
         InsertMenuW(hMenu, -1, MF_BYPOSITION | MF_STRING, ID_MENU_EXIT, exitText.c_str());
+        InsertMenuW(hMenu, -1, MF_BYPOSITION | MF_STRING, ID_MENU_OPEN_CONFIG, L"設定フォルダを開く");
 
         SetForegroundWindow(hwnd);
         TrackPopupMenu(hMenu, TPM_BOTTOMALIGN | TPM_LEFTALIGN, pt.x, pt.y, 0, hwnd, NULL);
