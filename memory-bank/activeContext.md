@@ -11,6 +11,10 @@
    - MonitorControllerの拡張（詳細情報取得、名前生成）
    - ConfigManagerの拡張（設定管理機能、バックアップ機能）
    - BrightnessDaemonの拡張（自動設定追加）
+6. HttpClientの認証と通信の信頼性向上
+   - nonceにUUIDを使用するように変更
+   - SetupHeadersにcharset: utf-8を追加
+   - Timestampを引数で受け取るように変更（同じ処理内で同じタイムスタンプを使用）
 
 ### 新しいドキュメント構造
 ```
