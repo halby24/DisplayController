@@ -12,7 +12,7 @@ jobs:
     runs-on: windows-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Setup vcpkg
         uses: lukka/run-vcpkg@v11
@@ -30,7 +30,7 @@ jobs:
         run: ctest -C Release --test-dir build
 
       - name: Upload artifacts
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: display-controller
           path: |
@@ -44,7 +44,7 @@ jobs:
     runs-on: windows-latest
     steps:
       - name: Download artifacts
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: display-controller
           path: display-controller
