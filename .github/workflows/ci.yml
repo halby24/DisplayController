@@ -1,0 +1,62 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main, develop ]
+    tags: [ 'v*' ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Setup vcpkg
+        uses: lukka/run-vcpkg@v11
+        with:
+          vcpkgGitCommitId: 'efb1e7436979a30c4d3e5ab2375fd8e2e461d541'
+
+      - name: Configure CMake
+        run: |
+          cmake -B build -S . -DCMAKE_TOOLCHAIN_FILE=${{ github.workspace }}/vcpkg/scripts/buildsystems/vcpkg.cmake
+
+      - name: Build
+        run: cmake --build build --config Release
+
+      - name: Run tests
+        run: ctest -C Release --test-dir build
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: display-controller
+          path: |
+            build/bin/Release/*.exe
+            build/bin/Release/*.dll
+            build/bin/Release/plugins/*.dll
+
+  release:
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: windows-latest
+    steps:
+      - name: Download artifacts
+        uses: actions/download-artifact@v3
+        with:
+          name: display-controller
+          path: display-controller
+
+      - name: Create ZIP archive
+        run: |
+          Compress-Archive -Path display-controller/* -DestinationPath DisplayController-${{ github.ref_name }}.zip
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: DisplayController-${{ github.ref_name }}.zip
+          draft: false
+          prerelease: false
+          generate_release_notes: true
