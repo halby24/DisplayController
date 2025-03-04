@@ -96,3 +96,7 @@ plugins/YourSensorName/
 ## ライセンス
 
 このプロジェクトはMITライセンスの下で公開されています。詳細は[LICENSE](LICENSE)ファイルを参照してください。
+
+## あとがき
+
+このアプリケーションは99.9%Roo CodeとClaude, Geminiが作ってくれました。ありがとう✨
