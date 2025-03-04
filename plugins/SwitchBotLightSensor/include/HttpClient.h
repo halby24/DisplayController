@@ -16,11 +16,13 @@ private:
     std::string m_secret;
     void* m_curl;  // CURL*のハンドル
 
-    void SetupHeaders(void* request, const std::string& signature, const std::string& nonce);
+    void SetupHeaders(void* request, const std::string& timestamp, const std::string& signature, const std::string& nonce);
     std::string GetTimestamp();
     void Initialize();
     void Cleanup();
     static size_t WriteCallback(void* contents, size_t size, size_t nmemb, void* userp);
+
+    std::string generateUUID();
 };
 
 class HttpException : public std::runtime_error {

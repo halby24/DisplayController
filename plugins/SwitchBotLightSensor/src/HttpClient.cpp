@@ -89,17 +89,43 @@ void HttpClient::Cleanup() {
     curl_global_cleanup();
 }
 
+// UUID生成関数
+std::string HttpClient::generateUUID() {
+    GUID guid;
+    HRESULT hr = CoCreateGuid(&guid);
+
+    if (SUCCEEDED(hr)) {
+        std::stringstream ss;
+        ss << std::hex << std::setfill('0')
+           << std::setw(8) << guid.Data1 << "-"
+           << std::setw(4) << guid.Data2 << "-"
+           << std::setw(4) << guid.Data3 << "-"
+           << std::setw(2) << static_cast<int>(guid.Data4[0])
+           << std::setw(2) << static_cast<int>(guid.Data4[1]) << "-"
+           << std::setw(2) << static_cast<int>(guid.Data4[2])
+           << std::setw(2) << static_cast<int>(guid.Data4[3])
+           << std::setw(2) << static_cast<int>(guid.Data4[4])
+           << std::setw(2) << static_cast<int>(guid.Data4[5])
+           << std::setw(2) << static_cast<int>(guid.Data4[6])
+           << std::setw(2) << static_cast<int>(guid.Data4[7]);
+        return ss.str();
+    }
+
+    return ""; // エラー時は空文字列を返す
+}
+
 std::string HttpClient::GetTimestamp() {
     auto now = std::chrono::system_clock::now();
     auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(now.time_since_epoch());
     return std::to_string(ms.count());
 }
 
-void HttpClient::SetupHeaders(void* request, const std::string& signature, const std::string& nonce) {
+void HttpClient::SetupHeaders(void* request, const std::string& timestamp, const std::string& signature, const std::string& nonce) {
     struct curl_slist* headers = nullptr;
     headers = curl_slist_append(headers, ("Authorization: " + m_token).c_str());
     headers = curl_slist_append(headers, "Content-Type: application/json");
-    headers = curl_slist_append(headers, ("t: " + GetTimestamp()).c_str());
+    headers = curl_slist_append(headers, "charset: utf-8");
+    headers = curl_slist_append(headers, ("t: " + timestamp).c_str());
     headers = curl_slist_append(headers, ("sign: " + signature).c_str());
     headers = curl_slist_append(headers, ("nonce: " + nonce).c_str());
 
@@ -114,11 +140,8 @@ nlohmann::json HttpClient::Get(const std::string& endpoint) {
 
     std::cout << "[SwitchBot] Making API request to: " << endpoint << std::endl;
 
-    // ランダムなnonceを生成
-    std::random_device rd;
-    std::mt19937 gen(rd());
-    std::uniform_int_distribution<> dis(0, 999999);
-    std::string nonce = std::to_string(dis(gen));
+    // nonceにUUIDを使用
+    std::string nonce = generateUUID();
 
     // 署名を生成
     std::string timestamp = GetTimestamp();
@@ -141,7 +164,7 @@ nlohmann::json HttpClient::Get(const std::string& endpoint) {
     curl_easy_setopt(m_curl, CURLOPT_SSL_VERIFYPEER, 1L);
     curl_easy_setopt(m_curl, CURLOPT_SSL_VERIFYHOST, 2L);
 
-    SetupHeaders(m_curl, signature, nonce);
+    SetupHeaders(m_curl, timestamp, signature, nonce);
 
     std::cout << "[SwitchBot] Sending request..." << std::endl;
     CURLcode res = curl_easy_perform(m_curl);
