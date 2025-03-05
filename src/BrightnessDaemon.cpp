@@ -203,6 +203,12 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
         g_brightnessManager->SetUpdateInterval(std::chrono::milliseconds(config.GetUpdateInterval()));
         g_brightnessManager->SetBrightnessRange(config.GetMinBrightness(), config.GetMaxBrightness());
         StringUtils::OutputMessage("設定を読み込みました: 更新間隔=" + std::to_string(config.GetUpdateInterval()) + "ms, 輝度範囲=" + std::to_string(config.GetMinBrightness()) + "-" + std::to_string(config.GetMaxBrightness()) + "%");
+
+        // 起動時同期設定の適用
+        if (config.GetSyncOnStartup()) {
+            ToggleSync(); // 同期を開始
+            StringUtils::OutputMessage("起動時同期設定が有効です。同期を開始します。");
+        }
     }
     catch (const ConfigException& e) {
         std::string error = "設定の読み込みに失敗しました: " + std::string(e.what());

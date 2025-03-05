@@ -44,6 +44,7 @@
   "brightness_daemon": {
     "update_interval_ms": 5000,
     "min_brightness": 0,
-    "max_brightness": 100
+    "max_brightness": 100,
+    "sync_on_startup": false
   }
 }

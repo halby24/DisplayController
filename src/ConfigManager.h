@@ -101,6 +101,9 @@ public:
     int GetMaxBrightness() const;
     void SetMaxBrightness(int value);
 
+  // 同期設定の取得
+  bool GetSyncOnStartup() const;
+
     // キャリブレーション設定の取得と設定
     CalibrationSettings GetDeviceCalibration(const std::string &deviceId) const;
     void SetDeviceCalibration(const std::string &deviceName, const CalibrationSettings &settings);

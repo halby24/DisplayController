@@ -1081,6 +1081,36 @@ bool ConfigManager::HasDeviceType(const std::string &type) const
     return false;
 }
 
+// 同期設定
+bool ConfigManager::GetSyncOnStartup() const
+{
+ if (!m_isLoaded)
+ {
+  throw ConfigException("設定が読み込まれていません");
+ }
+
+ if (!m_config.contains("brightness_daemon"))
+ {
+  throw ConfigException("brightness_daemonセクションが見つかりません");
+ }
+
+ const auto &brightness = m_config["brightness_daemon"];
+ if (!brightness.contains("sync_on_startup"))
+ {
+  return false; // デフォルト値はfalse
+ }
+
+ try
+ {
+  return brightness["sync_on_startup"].get<bool>();
+ }
+ catch (const nlohmann::json::exception &e)
+ {
+  StringUtils::OutputMessage("sync_on_startup の値が不正です。デフォルト値(false)を使用します: " + std::string(e.what()));
+  return false; // パースエラー時はデフォルト値false
+ }
+}
+
 // ここから不足していた実装を追加
 
 int ConfigManager::GetUpdateInterval() const

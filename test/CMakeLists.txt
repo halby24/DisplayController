@@ -21,13 +21,13 @@ add_executable(PluginLoaderTest
 # インクルードディレクトリの設定
 target_include_directories(PluginLoaderTest PRIVATE
     ${CMAKE_SOURCE_DIR}/src
+    ${CMAKE_SOURCE_DIR}/src/common
 )
 
 # リンク設定
 target_link_libraries(PluginLoaderTest PRIVATE
     GTest::gtest
     GTest::gtest_main
-    DisplayControllerLib
     DisplayControllerCommon # メインプロジェクトのライブラリ
 )
 
