@@ -26,6 +26,7 @@
         ".vars": "properties",
         ".vars.sample": "properties",
         "filesystem": "cpp",
-        "xstring": "cpp"
+        "xstring": "cpp",
+        "iostream": "cpp"
     }
 }

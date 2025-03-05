@@ -30,6 +30,9 @@ protected:
     }
 };
 
+auto currentDir = fs::current_path();
+auto pluginsDir = (currentDir / "../../Debug/plugins").make_preferred();
+
 TEST_F(PluginLoaderTest, LoadNonExistentDirectory)
 {
     PluginLoader loader;
@@ -63,14 +66,8 @@ TEST_F(PluginLoaderTest, GetLoadedPluginNames)
 // 注: このテストは実際のプラグインDLLが必要
 TEST_F(PluginLoaderTest, LoadAndCreateDummyPlugin)
 {
-    // DummyLightSensorプラグインをテストディレクトリにコピー
-    fs::copy_file(
-        "plugins/DummyLightSensor/DummyLightSensor.dll",
-        "test_plugins/DummyLightSensor/DummyLightSensor.dll",
-        fs::copy_options::overwrite_existing);
-
     PluginLoader loader;
-    size_t count = loader.LoadPlugins("test_plugins");
+    size_t count = loader.LoadPlugins(pluginsDir.string());
     EXPECT_EQ(count, 1);
 
     auto names = loader.GetLoadedPluginNames();
@@ -99,13 +96,8 @@ TEST_F(PluginLoaderTest, LoadInvalidPlugin)
 // プラグインの設定テスト
 TEST_F(PluginLoaderTest, PluginConfiguration)
 {
-    fs::copy_file(
-        "plugins/DummyLightSensor/DummyLightSensor.dll",
-        "test_plugins/DummyLightSensor/DummyLightSensor.dll",
-        fs::copy_options::overwrite_existing);
-
     PluginLoader loader;
-    loader.LoadPlugins("test_plugins");
+    loader.LoadPlugins(pluginsDir.string());
 
     // カスタム設定でセンサーを作成
     json config{{"defaultValue", 75}};
@@ -123,37 +115,21 @@ TEST_F(PluginLoaderTest, PluginConfiguration)
 // configファイルの形式変更のテスト
 TEST_F(PluginLoaderTest, ConfigFileFormat)
 {
+    auto configPath = (currentDir / "../../../docs/user/samples/config.json.sample").make_preferred().string();
+
     // テスト用のconfigファイルを作成
+    // config.json.sampleの内容を読み込み、config.jsonとして書き出す
+    std::ifstream config_sample_file(configPath);
+    std::string config_content((std::istreambuf_iterator<char>(config_sample_file)),
+                             std::istreambuf_iterator<char>());
+    config_sample_file.close();
+
     std::ofstream config_file("test_plugins/config.json");
-    config_file << R"({
-        "switchbot": {
-            "token": "test-token",
-            "secret": "test-secret",
-            "devices": [
-                {
-                    "id": "test-id",
-                    "name": "test-name",
-                    "type": "Light Sensor",
-                    "pluginName": "DummyLightSensor"
-                }
-            ]
-        },
-        "brightness_daemon": {
-            "update_interval_ms": 5000,
-            "min_brightness": 0,
-            "max_brightness": 100
-        }
-    })";
+    config_file << config_content;
     config_file.close();
 
-    // DummyLightSensorプラグインをテストディレクトリにコピー
-    fs::copy_file(
-        "plugins/DummyLightSensor/DummyLightSensor.dll",
-        "test_plugins/DummyLightSensor/DummyLightSensor.dll",
-        fs::copy_options::overwrite_existing);
-
     PluginLoader loader;
-    loader.LoadPlugins("test_plugins");
+    loader.LoadPlugins(pluginsDir.string());
 
     // センサーの作成テスト
     json config{{"defaultValue", 75}};
